@@ -53,7 +53,8 @@ export class ApiClient {
   }
 
   private get fetchImpl(): typeof fetch {
-    return this.config.fetchImpl ?? fetch;
+    if (this.config.fetchImpl) return this.config.fetchImpl;
+    return (...args: Parameters<typeof fetch>) => fetch(...args);
   }
 
   private async authHeader(skipAuth?: boolean): Promise<Record<string, string>> {
