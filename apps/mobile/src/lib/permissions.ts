@@ -11,6 +11,10 @@ function isGranted(status: string): boolean {
   return status === RESULTS.GRANTED || status === RESULTS.LIMITED;
 }
 
+type PermissionName = Parameters<typeof check>[0];
+
+const POST_NOTIFICATIONS = 'android.permission.POST_NOTIFICATIONS' as PermissionName;
+
 const ANDROID_SMS_PERMISSIONS = [
   PERMISSIONS.ANDROID.RECEIVE_SMS,
   PERMISSIONS.ANDROID.READ_SMS,
@@ -38,14 +42,14 @@ export async function requestSmsPermission(): Promise<boolean> {
 
 export async function hasNotificationPermission(): Promise<boolean> {
   if (Platform.OS !== 'android') return false;
-  const status = await check(PERMISSIONS.ANDROID.POST_NOTIFICATIONS);
+  const status = await check(POST_NOTIFICATIONS);
   return isGranted(status);
 }
 
 export async function requestNotificationPermission(): Promise<boolean> {
   if (Platform.OS !== 'android') return false;
-  const current = await check(PERMISSIONS.ANDROID.POST_NOTIFICATIONS);
+  const current = await check(POST_NOTIFICATIONS);
   if (isGranted(current)) return true;
-  const status = await request(PERMISSIONS.ANDROID.POST_NOTIFICATIONS);
+  const status = await request(POST_NOTIFICATIONS);
   return isGranted(status);
 }

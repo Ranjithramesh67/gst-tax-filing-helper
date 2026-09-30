@@ -29,5 +29,11 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "10.9.4"
+    }
   }
 }
