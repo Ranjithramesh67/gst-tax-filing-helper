@@ -1,0 +1,14 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": "..",
+  "testEnvironment": "node",
+  "testRegex": ".e2e-spec.ts$",
+  "transform": {
+    "^.+\\.(t|j)s$": "ts-jest"
+  },
+  "moduleNameMapper": {
+    "^@gstflow/types$": "<rootDir>/../../packages/types/src/index.ts",
+    "^@gstflow/validation$": "<rootDir>/../../packages/validation/src/index.ts"
+  },
+  "testTimeout": 30000
+}

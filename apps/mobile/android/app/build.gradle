@@ -1,0 +1,79 @@
+apply plugin: "com.android.application"
+apply plugin: "org.jetbrains.kotlin.android"
+apply plugin: "com.facebook.react"
+
+// In a hoisted npm-workspaces monorepo, react-native lives in the repository-root
+// node_modules rather than apps/mobile/node_modules. Resolve it through Node so
+// the React Gradle plugin (codegen, bundling, Hermes) finds it.
+def resolvedReactNativeDir = new File(
+    providers.exec {
+        workingDir(rootDir)
+        commandLine("node", "--print", "require.resolve('react-native/package.json')")
+    }.standardOutput.asText.get().trim()
+).getParentFile()
+def resolvedNodeModulesDir = resolvedReactNativeDir.getParentFile()
+
+/**
+ * React Native Gradle plugin configuration. Autolinking happens through the
+ * React Gradle plugin (RN 0.75+), so no manual native_modules.gradle apply.
+ */
+react {
+    /* Folders - defaults are relative to apps/mobile, overridden for the monorepo. */
+    reactNativeDir = resolvedReactNativeDir
+    codegenDir = new File(resolvedNodeModulesDir, "@react-native/codegen")
+    cliFile = new File(resolvedReactNativeDir, "cli.js")
+
+    /* Autolinking */
+    autolinkLibrariesWithApp()
+}
+
+def enableProguardInReleaseBuilds = false
+def jscFlavor = 'org.webkit:android-jsc:+'
+
+android {
+    ndkVersion rootProject.ext.ndkVersion
+    buildToolsVersion rootProject.ext.buildToolsVersion
+    compileSdk rootProject.ext.compileSdkVersion
+
+    namespace "com.gstflow.client"
+
+    defaultConfig {
+        applicationId "com.gstflow.client"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    buildTypes {
+        debug {
+            // Uses the auto-generated debug keystore provided by AGP.
+        }
+        release {
+            minifyEnabled enableProguardInReleaseBuilds
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+}
+
+dependencies {
+    implementation("com.facebook.react:react-android")
+
+    if (hermesEnabled.toBoolean()) {
+        implementation("com.facebook.react:hermes-android")
+    } else {
+        implementation jscFlavor
+    }
+}

@@ -1,0 +1,161 @@
+# GSTFlow API reference (`/v1`)
+
+REST reference for the GSTFlow backend (`apps/api`). Derived from the NestJS controllers and the
+shared `@gstflow/types` / `@gstflow/validation` packages.
+
+- Base URL: `http://localhost:4000/v1`
+- All request and response bodies are JSON unless noted (`POST /documents` is `multipart/form-data`;
+  `GET /documents/:id/download` returns the raw file).
+- Authenticated requests send `Authorization: Bearer <accessToken>`.
+- Dates are ISO 8601 strings.
+- Global prefix is `v1` and a global `HttpExceptionFilter` formats errors.
+
+## Auth model
+
+Roles: `SUPER_ADMIN`, `FIRM_ADMIN`, `FILER`, `CLIENT`. Staff roles are
+`SUPER_ADMIN` + `FIRM_ADMIN` + `FILER`. Every endpoint is guarded by a global `JwtAuthGuard`
+unless marked **Public**; a `RolesGuard` enforces the roles listed per endpoint.
+
+<details>
+<summary>Error and pagination shapes</summary>
+
+Error:
+
+```json
+{ "statusCode": 400, "message": "Invalid or expired token", "requestId": null, "path": "/v1/..." }
+```
+
+Paginated lists:
+
+```json
+{ "items": [], "total": 0, "page": 1, "pageSize": 25, "totalPages": 1 }
+```
+
+</details>
+
+## Health
+
+| Method | Path | Auth | Request | Response |
+|---|---|---|---|---|
+| GET | `/health` | Public | - | `{ status, uptime, db, timestamp }` |
+
+## Auth
+
+| Method | Path | Auth | Key request fields | Response |
+|---|---|---|---|---|
+| POST | `/auth/login` | Public | `email`, `password` | `AuthResponse` = `{ accessToken, refreshToken, expiresIn, user }` |
+| POST | `/auth/otp/request` | Public | `phone`, `purpose` (`CLIENT_ONBOARDING`/`DEVICE_PAIRING`/`LOGIN`), `clientId?` | `{ requestId, expiresIn, devCode? }` (`devCode` only when `OTP_DEV_ECHO=true`) |
+| POST | `/auth/otp/verify` | Public | `phone`, `code` (4-8 digits), `purpose`, `device?` (`androidId`, `platform`, `model?`, `osVersion?`, `appVersion?`, `pushToken?`) | `{ accessToken, refreshToken, expiresIn, client, consent, device? }` |
+| POST | `/auth/refresh` | Public | `refreshToken` | `{ accessToken, refreshToken, expiresIn }` |
+| POST | `/auth/logout` | Any bearer | `refreshToken` | `{ success: true }` |
+| GET | `/auth/me` | Any bearer | - | `AuthUser`-like `{ id, role, firmId, clientId, email?, name? }` |
+
+Notes: `otp/verify` looks up an active client by phone, upserts the device when supplied, writes a
+versioned `ConsentRecord` (`otpVerified: true`), sets `client.consentGranted`, and issues client
+tokens. OTPs expire after `OTP_TTL_SECONDS` and allow at most 5 attempts.
+
+## Clients
+
+| Method | Path | Roles | Key request fields | Response |
+|---|---|---|---|---|
+| GET | `/clients` | staff | query: `page`, `pageSize` (<=200), `search`, `status` (`ACTIVE`/`INACTIVE`/`ARCHIVED`), `firmId` (super admin) | `Paginated<Client>` |
+| POST | `/clients` | `SUPER_ADMIN`, `FIRM_ADMIN` | `name`, `phone`, `gstin?`, `pan?`, `email?`, `address?`, `stateCode?` (2), `firmId?` (super admin only) | `Client` |
+| GET | `/clients/:id` | staff | - | `Client` (includes `_count` of sms/devices/documents) |
+| PATCH | `/clients/:id` | `SUPER_ADMIN`, `FIRM_ADMIN` | any of the create fields, plus `status?` | `Client` |
+| DELETE | `/clients/:id` | `SUPER_ADMIN`, `FIRM_ADMIN` | - | `{ success: true }` (archives the client) |
+| GET | `/clients/:id/consents` | staff | - | `ConsentRecord[]` |
+| POST | `/clients/:id/consents/revoke` | `FIRM_ADMIN`, `FILER` | - | `{ success: true }` (revokes consents, sets `consentGranted=false`, revokes devices) |
+
+## Devices
+
+| Method | Path | Roles | Key request fields | Response |
+|---|---|---|---|---|
+| GET | `/devices` | staff | query: `page?`, `pageSize?`, `clientId?`, `revoked?` | `Device[]` |
+| GET | `/devices/:id` | staff | - | `Device` |
+| POST | `/devices/register` | `CLIENT`, staff | `androidId`, `platform` (`ANDROID`/`IOS`), `model?`, `osVersion?`, `appVersion?`, `pushToken?`, `clientId?` (required for staff) | `Device` |
+| POST | `/devices/:id/revoke` | `CLIENT`, staff | - | `Device` (revoked; active consents cleared, `consentGranted=false`) |
+| POST | `/devices/:id/heartbeat` | `CLIENT` | - | `{ success: true }` (updates `lastSeenAt`) |
+
+## SMS
+
+| Method | Path | Roles | Key request fields | Response |
+|---|---|---|---|---|
+| POST | `/sms/ingest` | `CLIENT` | `items[]` of `{ sender, body, receivedAt (ISO), deviceId?, hash }` (1-200 items) | `{ accepted, duplicates, rejected, ids }` |
+| GET | `/sms` | staff | query: `clientId?`, `category?`, `status?`, `from?`, `to?`, `search?` (sender), `page?`, `pageSize?` | `Paginated<SmsMessage>` |
+| GET | `/sms/:id` | staff | - | `SmsMessage` (with `parsed` and `documents`) |
+| POST | `/sms/:id/classify` | staff | `category`, `status?` | `SmsMessage` |
+
+Notes: ingest requires an active client session and verified consent; each item is encrypted at
+rest, auto-classified and parsed into `ParsedGstData`. Duplicate `(clientId, hash)` rows are
+reported as `duplicates`. Bodies are decrypted on read for staff.
+
+## Documents
+
+All document endpoints require staff roles. Upload is `multipart/form-data`.
+
+| Method | Path | Key request fields | Response |
+|---|---|---|---|
+| POST | `/documents` | form field `file` (pdf/jpeg/png/webp, <= `MAX_UPLOAD_MB`), plus `clientId`, `type?` (`BILL`/`TAX_FILED_COPY`/`INVOICE_COPY`/`GST_CERTIFICATE`/`OTHER`), `smsMessageId?` | `Document` |
+| GET | `/documents` | query: `page?`, `pageSize?`, `clientId?`, `type?` | `Paginated<Document>` |
+| GET | `/documents/:id` | - | `Document` |
+| GET | `/documents/:id/download` | - | raw file stream (`Content-Disposition: attachment`) |
+
+## Invoices
+
+Staff roles only.
+
+| Method | Path | Key request fields | Response |
+|---|---|---|---|
+| GET | `/invoices` | query: `clientId?`, `page?`, `pageSize?` | `Paginated<Invoice>` |
+| POST | `/invoices` | `clientId`, `smsMessageId?`, `invoiceNo?`, `invoiceDate?`, `counterpartyGstin?`, `taxableValue?`, `taxAmount?`, `totalAmount?` | `Invoice` |
+
+## Returns
+
+Staff roles only.
+
+| Method | Path | Key request fields | Response |
+|---|---|---|---|
+| GET | `/returns` | query: `clientId?`, `status?` (`PENDING`/`IN_REVIEW`/`FILED`/`REJECTED`), `type?` (`GSTR1`/`GSTR3B`/`GSTR9`/`OTHER`), `page?`, `pageSize?` | `Paginated<GstReturn>` |
+| POST | `/returns` | `clientId`, `type`, `period` (`YYYY-MM`), `dueDate?`, `notes?`, `status?` | `GstReturn` |
+
+## Filings
+
+Staff roles only.
+
+| Method | Path | Key request fields | Response |
+|---|---|---|---|
+| GET | `/filings` | query: `clientId?`, `status?`, `type?`, `page?`, `pageSize?` | `Paginated<Filing>` |
+| POST | `/filings` | `clientId`, `returnId?`, `type`, `period` (`YYYY-MM`), `referenceNo?`, `notes?`, `status?` | `Filing` |
+| PATCH | `/filings/:id/status` | `status`, `referenceNo?`, `notes?` | `Filing` |
+
+Notes: setting a filing to `FILED` records `filedAt`/`filedById`, and when the filing is linked to
+a return (`returnId`) the parent `GstReturn` is marked `FILED` too.
+
+## Admin
+
+| Method | Path | Roles | Key request fields | Response |
+|---|---|---|---|---|
+| GET | `/admin/firms` | `SUPER_ADMIN` | query: `page?`, `pageSize?`, `search?`, `status?` | `Paginated<Firm>` (with `_count`) |
+| POST | `/admin/firms` | `SUPER_ADMIN` | `name`, `slug?` (auto-generated + de-duplicated), `gstin?`, `email?`, `phone?` | `Firm` |
+| GET | `/admin/firms/:id` | `SUPER_ADMIN` | - | `Firm` |
+| PATCH | `/admin/firms/:id` | `SUPER_ADMIN` | `name?`, `gstin?`, `email?`, `phone?`, `status?` | `Firm` |
+| GET | `/admin/users` | `SUPER_ADMIN` | query: `page?`, `pageSize?`, `search?`, `role?`, `firmId?` | `Paginated<User>` |
+| POST | `/admin/users` | `SUPER_ADMIN` | `name`, `email`, `password`, `role`, `phone?`, `firmId?` | `User` |
+| PATCH | `/admin/users/:id` | `SUPER_ADMIN` | `name?`, `phone?`, `role?`, `isActive?` | `User` |
+| GET | `/admin/releases` | `SUPER_ADMIN` | query: `page?`, `pageSize?`, `platform?`, `channel?` | `Paginated<AppRelease>` |
+| POST | `/admin/releases` | `SUPER_ADMIN` | `platform`, `version`, `versionCode`, `channel`, `url`, `checksum?`, `changelog?`, `mandatory?` | `AppRelease` |
+| GET | `/admin/audit` | `SUPER_ADMIN`, `FIRM_ADMIN`, `FILER` | query: `page?`, `pageSize?`, `firmId?` (super admin), `action?`, `entity?`, `from?`, `to?` | `Paginated<AuditLog>` |
+
+## Enums
+
+- `Role`: `SUPER_ADMIN`, `FIRM_ADMIN`, `FILER`, `CLIENT`
+- `FirmStatus`: `ACTIVE`, `SUSPENDED`, `PENDING`
+- `ClientStatus`: `ACTIVE`, `INACTIVE`, `ARCHIVED`
+- `SmsCategory`: `GST_INVOICE`, `GST_RETURN`, `EWAY_BILL`, `TAX_PAYMENT`, `GST_NOTICE`, `UNCLASSIFIED`, `OTHER`
+- `SmsStatus`: `RECEIVED`, `REVIEWED`, `FILED`, `IGNORED`, `FAILED`
+- `DocumentType`: `BILL`, `TAX_FILED_COPY`, `INVOICE_COPY`, `GST_CERTIFICATE`, `OTHER`
+- `ReturnType`: `GSTR1`, `GSTR3B`, `GSTR9`, `OTHER`
+- `FilingStatus`: `PENDING`, `IN_REVIEW`, `FILED`, `REJECTED`
+- `OtpPurpose`: `CLIENT_ONBOARDING`, `DEVICE_PAIRING`, `LOGIN`
+- `DevicePlatform`: `ANDROID`, `IOS`
+- `ReleaseChannel`: `STABLE`, `BETA`

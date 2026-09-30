@@ -1,0 +1,39 @@
+// React Native 0.75 settings for a hoisted npm-workspaces monorepo. The plugin
+// path is resolved through Node so it works whether react-native is installed
+// in apps/mobile/node_modules or hoisted to the repository root.
+def reactNativeGradlePluginDir = new File(
+    providers.exec {
+        workingDir(rootDir)
+        commandLine(
+            "node", "--print",
+            "require.resolve('@react-native/gradle-plugin/package.json', { paths: [require.resolve('react-native/package.json')] })"
+        )
+    }.standardOutput.asText.get().trim()
+).getParentFile()
+
+// Resolve the React Native CLI so autolinking does not depend on npx fetching
+// from the network. The CLI runs from the app root (settingsDir/..).
+def reactNativeCli = new File(
+    providers.exec {
+        workingDir(rootDir)
+        commandLine("node", "--print", "require.resolve('react-native/cli.js')")
+    }.standardOutput.asText.get().trim()
+).absolutePath
+
+pluginManagement {
+    includeBuild(reactNativeGradlePluginDir.absolutePath)
+}
+
+plugins {
+    id("com.facebook.react.settings")
+}
+
+extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
+    ex.autolinkLibrariesFromCommand(["node", reactNativeCli, "config"])
+}
+
+rootProject.name = 'GSTFlowClient'
+include ':app'
+
+// Keep the plugin build available to the app project as well (autolinking).
+includeBuild(reactNativeGradlePluginDir.absolutePath)

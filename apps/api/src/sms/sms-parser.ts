@@ -43,11 +43,26 @@ const INVOICE_PATTERNS = [/\binvoice\b/i, /\bbill\b/i, /\bhsgst\b/i];
 const GSTIN_REGEX = /\b\d{2}[A-Z]{5}\d{4}[A-Z][0-9A-Z]Z[0-9A-Z]\b/;
 const INVOICE_REGEX =
   /(?:invoice|inv|bill)\s*(?:no|number|num|#)?\s*[:#.\-]?\s*([a-z0-9][a-z0-9/\-]*\d[a-z0-9/\-]*)/i;
-const AMOUNT_REGEX = /(?:rs\.?|inr)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/i;
-const TAXABLE_REGEX =
-  /(?:taxable\s*(?:value|amount)|base\s*amount)\s*[:#.\-]?\s*(?:rs\.?|inr)?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/i;
-const TAX_REGEX =
-  /(?:tax\s*(?:amount|amt)|igst|cgst|sgst|total\s*tax)\s*[:#.\-]?\s*(?:rs\.?|inr)?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/i;
+
+// Matches Indian/Western grouped digits with optional 1-2 decimal places.
+// e.g. 1,00,000 / 12,34,567.50 / 18000 / 999.9
+const NUMBER_PATTERN = '[0-9][0-9,]*(?:\\.[0-9]{1,2})?';
+// Optional currency marker: Rs / Rs. / INR / the rupee sign.
+const CURRENCY_PATTERN = '(?:rs\\.?|inr|₹)?\\s*';
+
+const TOTAL_REGEX = new RegExp(
+  `(?:grand\\s*total|total\\s*(?:amount|value)|total|amount)\\s*[:#.\\-]?\\s*${CURRENCY_PATTERN}(${NUMBER_PATTERN})`,
+  'i',
+);
+const AMOUNT_REGEX = new RegExp(`(?:rs\\.?|inr|₹)\\s*(${NUMBER_PATTERN})`, 'i');
+const TAXABLE_REGEX = new RegExp(
+  `(?:taxable\\s*(?:value|amount)|base\\s*amount|taxable)\\s*[:#.\\-]?\\s*${CURRENCY_PATTERN}(${NUMBER_PATTERN})`,
+  'i',
+);
+const TAX_REGEX = new RegExp(
+  `(?:total\\s*tax|tax\\s*(?:amount|amt|value)?|igst|cgst|sgst|cess)\\s*[:#.\\-]?\\s*${CURRENCY_PATTERN}(${NUMBER_PATTERN})`,
+  'i',
+);
 const HSN_REGEX = /hsn(?:\s*(?:code|no|number))?\s*[:#.\-]?\s*([0-9]{4,8})/i;
 const DUE_DATE_REGEX = /due(?:\s*date|\s*on)?\s*[:#.\-]?\s*(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})/i;
 const DATE_REGEX = /(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})/;
@@ -123,7 +138,8 @@ export function parseGstSms(body: string): ParsedSms {
 
   const gstin = GSTIN_REGEX.exec(upper)?.[0] ?? null;
   const invoiceNo = cleanToken(INVOICE_REGEX.exec(text)?.[1]);
-  const amount = parseNumber(AMOUNT_REGEX.exec(text)?.[1]);
+  const totalAmount = TOTAL_REGEX.exec(text)?.[1];
+  const amount = parseNumber(totalAmount ?? AMOUNT_REGEX.exec(text)?.[1]);
   const taxableValue = parseNumber(TAXABLE_REGEX.exec(text)?.[1]);
   const taxAmount = parseNumber(TAX_REGEX.exec(text)?.[1]);
   const hsn = HSN_REGEX.exec(text)?.[1] ?? null;

@@ -1,0 +1,7 @@
+{
+  "name": "GSTFlowClient",
+  "displayName": "GSTFlow Client",
+  "android": {
+    "package": "com.gstflow.client"
+  }
+}
