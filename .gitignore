@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+build/
+.turbo/
+.next/
+out/
+*.tsbuildinfo
+
+# Env
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Test
+coverage/
+
+# Uploads (local dev storage)
+uploads/
+storage/
+
+# Mobile
+apps/mobile/android/app/build/
+apps/mobile/ios/Pods/
+apps/mobile/.expo/
