@@ -8,6 +8,12 @@ import { CryptoModule } from './common/crypto/crypto.module';
 import { AuditModule } from './common/audit/audit.module';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
+import { ClientsModule } from './clients/clients.module';
+import { DevicesModule } from './devices/devices.module';
+import { SmsModule } from './sms/sms.module';
+import { DocumentsModule } from './documents/documents.module';
+import { FilingsModule } from './filings/filings.module';
+import { AdminModule } from './admin/admin.module';
 
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -25,6 +31,12 @@ import { JwtModule } from './common/jwt/jwt.module';
     AuditModule,
     HealthModule,
     AuthModule,
+    ClientsModule,
+    DevicesModule,
+    SmsModule,
+    DocumentsModule,
+    FilingsModule,
+    AdminModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
