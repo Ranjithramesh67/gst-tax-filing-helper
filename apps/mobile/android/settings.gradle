@@ -1,32 +1,17 @@
-// React Native 0.75 settings for a hoisted npm-workspaces monorepo. The plugin
-// path is resolved through Node so it works whether react-native is installed
-// in apps/mobile/node_modules or hoisted to the repository root.
-def reactNativeGradlePluginDir = new File(
-    providers.exec {
-        workingDir(rootDir)
-        commandLine(
-            "node", "--print",
-            "require.resolve('@react-native/gradle-plugin/package.json', { paths: [require.resolve('react-native/package.json')] })"
-        )
-    }.standardOutput.asText.get().trim()
-).getParentFile()
-
-// Resolve the React Native CLI so autolinking does not depend on npx fetching
-// from the network. The CLI runs from the app root (settingsDir/..).
-def reactNativeCli = new File(
-    providers.exec {
-        workingDir(rootDir)
-        commandLine("node", "--print", "require.resolve('react-native/cli.js')")
-    }.standardOutput.asText.get().trim()
-).absolutePath
-
+// React Native 0.75 settings for a hoisted npm-workspaces monorepo.
+// Gradle requires pluginManagement to be the very first block, so the plugin
+// path is referenced relative to this file. The React Native CLI is resolved
+// afterwards through the settings directory for autolinking.
 pluginManagement {
-    includeBuild(reactNativeGradlePluginDir.absolutePath)
+    includeBuild("../../../node_modules/@react-native/gradle-plugin")
 }
 
 plugins {
     id("com.facebook.react.settings")
 }
+
+def workspaceRoot = settingsDir.parentFile.parentFile.parentFile
+def reactNativeCli = new File(workspaceRoot, "node_modules/react-native/cli.js").absolutePath
 
 extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
     ex.autolinkLibrariesFromCommand(["node", reactNativeCli, "config"])
@@ -36,4 +21,4 @@ rootProject.name = 'GSTFlowClient'
 include ':app'
 
 // Keep the plugin build available to the app project as well (autolinking).
-includeBuild(reactNativeGradlePluginDir.absolutePath)
+includeBuild("../../../node_modules/@react-native/gradle-plugin")

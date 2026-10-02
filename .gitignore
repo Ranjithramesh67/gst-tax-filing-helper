@@ -39,5 +39,10 @@ uploads/
 
 # Mobile
 apps/mobile/android/app/build/
+apps/mobile/android/.gradle/
+apps/mobile/android/local.properties
 apps/mobile/ios/Pods/
 apps/mobile/.expo/
+
+# Hosted APK download (build artifact, produced by the Android toolchain)
+apps/web/public/*.apk

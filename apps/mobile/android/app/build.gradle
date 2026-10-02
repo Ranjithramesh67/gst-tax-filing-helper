@@ -23,6 +23,9 @@ react {
     codegenDir = new File(resolvedNodeModulesDir, "@react-native/codegen")
     cliFile = new File(resolvedReactNativeDir, "cli.js")
 
+    /* Hoisted install: the bundled Hermes compiler lives under the workspace root. */
+    hermesCommand = new File(resolvedReactNativeDir, "sdks/hermesc/%OS-BIN%/hermesc").absolutePath
+
     /* Autolinking */
     autolinkLibrariesWithApp()
 }
@@ -55,6 +58,9 @@ android {
         }
         release {
             minifyEnabled enableProguardInReleaseBuilds
+            // Sideload distribution: sign with the AGP-generated debug keystore so
+            // the artifact is installable without managing a private release key.
+            signingConfig signingConfigs.debug
         }
     }
 
