@@ -1,4 +1,4 @@
-import { PaymentMethod, PaymentStatus, Role } from './enums';
+import { PaymentMethod, PaymentStatus, Role, RoleScope } from './enums';
 import type {
   AppRelease,
   AuditLog,
@@ -23,7 +23,9 @@ import type {
   Payment,
   PaymentLink,
   PaymentRequest,
+  PermissionGroup,
   PublicPaymentRequest,
+  RoleDefinition,
   SmsMessage,
   Subscription,
   User,
@@ -39,7 +41,11 @@ export interface AuthUser {
   id: string;
   email: string;
   name: string;
-  role: Role;
+  role: string;
+  roleId?: string | null;
+  roleName?: string | null;
+  isSuperAdmin?: boolean;
+  permissions?: string[];
   firmId?: string | null;
 }
 
@@ -167,7 +173,8 @@ export interface CreateUserBody {
   name: string;
   email: string;
   password: string;
-  role: Role;
+  role?: Role;
+  roleId?: string;
   phone?: string;
   firmId?: string;
 }
@@ -175,6 +182,62 @@ export interface CreateUserBody {
 export interface UpdateUserBody {
   name?: string;
   phone?: string;
+  role?: Role;
+  roleId?: string;
+  isActive?: boolean;
+}
+
+export interface CreateRoleBody {
+  key: string;
+  name: string;
+  description?: string;
+  scope?: RoleScope;
+  firmId?: string;
+  permissions: string[];
+}
+
+export interface UpdateRoleBody {
+  name?: string;
+  description?: string;
+  permissions?: string[];
+}
+
+export interface AssignRoleBody {
+  roleId: string;
+}
+
+export interface ListRolesQuery extends ListQuery {
+  scope?: RoleScope;
+  firmId?: string;
+}
+
+export interface PermissionCatalog {
+  groups: PermissionGroup[];
+}
+
+export interface FirmPermissionsResponse {
+  groups: PermissionGroup[];
+  permissions: string[];
+}
+
+export interface FirmRolesResponse {
+  system: RoleDefinition[];
+  firm: RoleDefinition[];
+}
+
+export interface CreateTeamMemberBody {
+  name: string;
+  email: string;
+  password: string;
+  roleId?: string;
+  role?: Role;
+  phone?: string;
+}
+
+export interface UpdateTeamMemberBody {
+  name?: string;
+  phone?: string;
+  roleId?: string;
   role?: Role;
   isActive?: boolean;
 }
@@ -346,6 +409,8 @@ export type PaginatedAudit = Paginated<AuditLog>;
 export type PaginatedFirms = Paginated<Firm>;
 export type PaginatedUsers = Paginated<User>;
 export type PaginatedReleases = Paginated<AppRelease>;
+export type PaginatedRoles = Paginated<RoleDefinition>;
+export type PaginatedTeam = Paginated<User>;
 
 export interface ApiErrorBody {
   statusCode: number;

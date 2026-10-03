@@ -1,4 +1,5 @@
 import { GstFlowApi } from '@gstflow/api-client';
+import { withBasePath } from './basePath';
 
 const TOKEN_KEY = 'gstflow.admin.access';
 const REFRESH_KEY = 'gstflow.admin.refresh';
@@ -31,8 +32,8 @@ export const api = new GstFlowApi({
   onTokensRefreshed: (tokens) => tokenStore.set(tokens.accessToken, tokens.refreshToken),
   onUnauthorized: () => {
     tokenStore.clear();
-    if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-      window.location.href = '/login';
+    if (typeof window !== 'undefined' && !window.location.pathname.startsWith(withBasePath('/login'))) {
+      window.location.href = withBasePath('/login');
     }
   },
 });

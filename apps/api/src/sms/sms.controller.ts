@@ -10,9 +10,9 @@ import type {
 import { classifySmsSchema, smsIngestSchema } from '@gstflow/validation';
 
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
-import { STAFF_ROLES } from '../common/auth/actor.types';
 import type { Actor } from '../common/auth/actor.types';
 import { SmsService } from './sms.service';
 import type { SmsListQueryDto } from './dto';
@@ -31,7 +31,7 @@ export class SmsController {
   }
 
   @Get()
-  @Roles(...STAFF_ROLES)
+  @RequirePermissions('sms:read')
   async list(
     @CurrentUser() actor: Actor,
     @Query() query: SmsListQueryDto,
@@ -40,13 +40,13 @@ export class SmsController {
   }
 
   @Get(':id')
-  @Roles(...STAFF_ROLES)
+  @RequirePermissions('sms:read')
   async getById(@CurrentUser() actor: Actor, @Param('id') id: string): Promise<SmsMessage> {
     return this.sms.getById(actor, id);
   }
 
   @Post(':id/classify')
-  @Roles(...STAFF_ROLES)
+  @RequirePermissions('sms:classify')
   async classify(
     @CurrentUser() actor: Actor,
     @Param('id') id: string,

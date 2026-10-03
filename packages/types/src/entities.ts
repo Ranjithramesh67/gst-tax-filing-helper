@@ -50,12 +50,38 @@ export interface User {
   email: string;
   name: string;
   phone?: string | null;
-  role: Role;
+  /** Role key (system or custom). Retained as a string for display/back-compat. */
+  role: string;
+  roleId?: string | null;
+  roleName?: string | null;
+  isSuperAdmin?: boolean;
+  /** Effective permission keys (only populated on the current-user payload). */
+  permissions?: string[];
   isActive: boolean;
   lastLoginAt?: string | null;
   createdAt: string;
   updatedAt: string;
   firm?: Pick<Firm, 'id' | 'name' | 'slug'> | null;
+}
+
+export interface RoleDefinition {
+  id: string;
+  key: string;
+  name: string;
+  description?: string | null;
+  scope: import('./enums').RoleScope;
+  firmId?: string | null;
+  isSystem: boolean;
+  permissions: string[];
+  createdAt: string;
+  updatedAt: string;
+  _count?: { users: number };
+  firm?: Pick<Firm, 'id' | 'name' | 'slug'> | null;
+}
+
+export interface PermissionGroup {
+  group: string;
+  permissions: { key: string; label: string; platform: boolean }[];
 }
 
 export interface Client {

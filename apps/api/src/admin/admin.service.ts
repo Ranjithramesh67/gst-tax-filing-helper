@@ -33,6 +33,7 @@ const FIRM_SELECT = {
 
 const USER_INCLUDE = {
   firm: { select: { id: true, name: true, slug: true } },
+  role: { select: { key: true, name: true } },
 } satisfies Prisma.UserInclude;
 
 @Injectable()
@@ -54,6 +55,23 @@ export class AdminService {
   private async requireUser(id: string): Promise<void> {
     const user = await this.prisma.user.findUnique({ where: { id }, select: { id: true } });
     if (!user) throw new NotFoundException('User not found');
+  }
+
+  private async resolveRoleId(roleId?: string, roleKey?: string): Promise<string | null> {
+    if (roleId) {
+      const role = await this.prisma.role.findUnique({ where: { id: roleId }, select: { id: true } });
+      if (!role) throw new NotFoundException('Role not found');
+      return roleId;
+    }
+    if (roleKey) {
+      const role = await this.prisma.role.findFirst({
+        where: { key: roleKey, firmId: null },
+        select: { id: true },
+      });
+      if (!role) throw new NotFoundException(`Role "${roleKey}" not found`);
+      return role.id;
+    }
+    return null;
   }
 
   private slugify(name: string): string {
@@ -180,7 +198,7 @@ export class AdminService {
   async listUsers(query: ListUsersQuery): Promise<Paginated<User>> {
     const slice = this.slice(query);
     const where: Prisma.UserWhereInput = {};
-    if (query.role) where.role = query.role;
+    if (query.role) where.role = { key: query.role };
     if (query.firmId) where.firmId = query.firmId;
     if (query.search) {
       where.OR = [
@@ -205,13 +223,16 @@ export class AdminService {
 
   async createUser(input: CreateUserInput, actor: Actor): Promise<User> {
     const passwordHash = await bcrypt.hash(input.password, 10);
+    const roleId =
+      (await this.resolveRoleId(input.roleId, input.role)) ??
+      (await this.resolveRoleId(undefined, Role.FILER));
     const user = await this.prisma.user
       .create({
         data: {
           name: input.name,
           email: input.email,
           phone: input.phone ?? null,
-          role: input.role,
+          roleId,
           firmId: input.firmId ?? null,
           passwordHash,
         },
@@ -227,19 +248,21 @@ export class AdminService {
       action: 'user.create',
       entity: 'User',
       entityId: user.id,
-      meta: { email: user.email, role: user.role, firmId: user.firmId },
+      meta: { email: user.email, role: user.role?.key ?? null, firmId: user.firmId },
     });
     return serialiseUser(user);
   }
 
   async updateUser(id: string, input: UpdateUserInput, actor: Actor): Promise<User> {
     await this.requireUser(id);
+    const roleChanged = input.roleId !== undefined || input.role !== undefined;
+    const nextRoleId = roleChanged ? await this.resolveRoleId(input.roleId, input.role) : undefined;
     const user = await this.prisma.user.update({
       where: { id },
       data: {
         ...(input.name !== undefined ? { name: input.name } : {}),
         ...(input.phone !== undefined ? { phone: input.phone } : {}),
-        ...(input.role !== undefined ? { role: input.role } : {}),
+        ...(nextRoleId !== undefined ? { roleId: nextRoleId } : {}),
         ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
       },
       include: USER_INCLUDE,

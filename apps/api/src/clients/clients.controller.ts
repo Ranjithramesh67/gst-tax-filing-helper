@@ -1,9 +1,8 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
-import { Role } from '@gstflow/types';
 import type { Client, ConsentRecord, PaginatedClients } from '@gstflow/types';
 
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { Roles } from '../common/decorators/roles.decorator';
+import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import type { Actor } from '../common/auth/actor.types';
 import { ClientsService } from './clients.service';
@@ -16,15 +15,12 @@ import {
   type UpdateClientDto,
 } from './dto';
 
-const STAFF_ROLES = [Role.SUPER_ADMIN, Role.FIRM_ADMIN, Role.FILER] as const;
-const ADMIN_ROLES = [Role.SUPER_ADMIN, Role.FIRM_ADMIN] as const;
-
 @Controller('clients')
 export class ClientsController {
   constructor(private readonly clients: ClientsService) {}
 
   @Get()
-  @Roles(...STAFF_ROLES)
+  @RequirePermissions('clients:read')
   list(
     @CurrentUser() actor: Actor,
     @Query(new ZodValidationPipe(listClientsQuerySchema)) query: ListClientsQueryDto,
@@ -33,7 +29,7 @@ export class ClientsController {
   }
 
   @Post()
-  @Roles(...ADMIN_ROLES)
+  @RequirePermissions('clients:write')
   create(
     @CurrentUser() actor: Actor,
     @Body(new ZodValidationPipe(createClientExtendedSchema)) body: CreateClientDto,
@@ -42,13 +38,13 @@ export class ClientsController {
   }
 
   @Get(':id')
-  @Roles(...STAFF_ROLES)
+  @RequirePermissions('clients:read')
   get(@CurrentUser() actor: Actor, @Param('id') id: string): Promise<Client> {
     return this.clients.get(actor, id);
   }
 
   @Patch(':id')
-  @Roles(...ADMIN_ROLES)
+  @RequirePermissions('clients:write')
   update(
     @CurrentUser() actor: Actor,
     @Param('id') id: string,
@@ -58,19 +54,19 @@ export class ClientsController {
   }
 
   @Delete(':id')
-  @Roles(...ADMIN_ROLES)
+  @RequirePermissions('clients:delete')
   remove(@CurrentUser() actor: Actor, @Param('id') id: string): Promise<{ success: boolean }> {
     return this.clients.archive(actor, id);
   }
 
   @Get(':id/consents')
-  @Roles(...STAFF_ROLES)
+  @RequirePermissions('clients:read')
   consents(@CurrentUser() actor: Actor, @Param('id') id: string): Promise<ConsentRecord[]> {
     return this.clients.listConsents(actor, id);
   }
 
   @Post(':id/consents/revoke')
-  @Roles(Role.FIRM_ADMIN, Role.FILER)
+  @RequirePermissions('consents:manage')
   revokeConsents(
     @CurrentUser() actor: Actor,
     @Param('id') id: string,

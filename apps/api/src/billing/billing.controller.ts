@@ -33,9 +33,9 @@ import { z } from 'zod';
 
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
-import { Roles } from '../common/decorators/roles.decorator';
+import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
-import { STAFF_ROLES, type Actor } from '../common/auth/actor.types';
+import { type Actor } from '../common/auth/actor.types';
 import { BillingService } from './billing.service';
 import type {
   CreateBillingInvoiceInput,
@@ -55,11 +55,11 @@ const markPaidSchema = z.object({
 type MarkPaidInput = z.infer<typeof markPaidSchema>;
 
 @Controller('billing')
-@Roles(...STAFF_ROLES)
 export class BillingController {
   constructor(private readonly billing: BillingService) {}
 
   @Post('invoices')
+  @RequirePermissions('billing:manage')
   async createInvoice(
     @CurrentUser() actor: Actor,
     @Body(new ZodValidationPipe(createBillingInvoiceSchema)) body: CreateBillingInvoiceInput,
@@ -68,6 +68,7 @@ export class BillingController {
   }
 
   @Get('invoices')
+  @RequirePermissions('billing:read')
   async listInvoices(
     @CurrentUser() actor: Actor,
     @Query(new ZodValidationPipe(listBillingInvoicesQuerySchema)) query: ListBillingInvoicesQuery,
@@ -76,6 +77,7 @@ export class BillingController {
   }
 
   @Get('invoices/:id')
+  @RequirePermissions('billing:read')
   async getInvoice(
     @CurrentUser() actor: Actor,
     @Param('id') id: string,
@@ -84,6 +86,7 @@ export class BillingController {
   }
 
   @Patch('invoices/:id')
+  @RequirePermissions('billing:manage')
   async updateInvoice(
     @CurrentUser() actor: Actor,
     @Param('id') id: string,
@@ -93,6 +96,7 @@ export class BillingController {
   }
 
   @Post('subscriptions')
+  @RequirePermissions('billing:manage')
   async createSubscription(
     @CurrentUser() actor: Actor,
     @Body(new ZodValidationPipe(createSubscriptionSchema)) body: CreateSubscriptionInput,
@@ -101,6 +105,7 @@ export class BillingController {
   }
 
   @Get('subscriptions')
+  @RequirePermissions('billing:read')
   async listSubscriptions(
     @CurrentUser() actor: Actor,
     @Query('clientId') clientId?: string,
@@ -109,6 +114,7 @@ export class BillingController {
   }
 
   @Patch('subscriptions/:id')
+  @RequirePermissions('billing:manage')
   async updateSubscription(
     @CurrentUser() actor: Actor,
     @Param('id') id: string,
@@ -118,6 +124,7 @@ export class BillingController {
   }
 
   @Delete('subscriptions/:id')
+  @RequirePermissions('billing:manage')
   async removeSubscription(
     @CurrentUser() actor: Actor,
     @Param('id') id: string,
@@ -126,6 +133,7 @@ export class BillingController {
   }
 
   @Post('payment-requests')
+  @RequirePermissions('billing:manage')
   async createPaymentRequest(
     @CurrentUser() actor: Actor,
     @Body(new ZodValidationPipe(createPaymentRequestSchema)) body: CreatePaymentRequestInput,
@@ -134,6 +142,7 @@ export class BillingController {
   }
 
   @Get('payment-requests')
+  @RequirePermissions('billing:read')
   async listPaymentRequests(
     @CurrentUser() actor: Actor,
     @Query(new ZodValidationPipe(listPaymentRequestsQuerySchema)) query: ListPaymentRequestsQuery,
@@ -142,6 +151,7 @@ export class BillingController {
   }
 
   @Delete('payment-requests/:id')
+  @RequirePermissions('billing:manage')
   async removePaymentRequest(
     @CurrentUser() actor: Actor,
     @Param('id') id: string,
@@ -150,6 +160,7 @@ export class BillingController {
   }
 
   @Post('payment-requests/:id/mark-paid')
+  @RequirePermissions('billing:manage')
   async markPaymentRequestPaid(
     @CurrentUser() actor: Actor,
     @Param('id') id: string,

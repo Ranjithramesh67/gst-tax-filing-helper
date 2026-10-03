@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { Building2, LayoutDashboard, LogOut, ScrollText, Smartphone, Users, Wallet } from 'lucide-react';
+import { Building2, LayoutDashboard, LogOut, ScrollText, ShieldCheck, Smartphone, Users, Wallet } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/components/ui';
 
@@ -12,6 +12,7 @@ const NAV = [
   { href: '/firms', label: 'Firms', icon: Building2 },
   { href: '/billing', label: 'Billing', icon: Wallet },
   { href: '/users', label: 'Users', icon: Users },
+  { href: '/roles', label: 'Roles', icon: ShieldCheck },
   { href: '/releases', label: 'App Releases', icon: Smartphone },
   { href: '/audit', label: 'Audit Log', icon: ScrollText },
 ];

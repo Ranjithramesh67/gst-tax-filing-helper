@@ -3,9 +3,9 @@ import { createFilingSchema, updateFilingSchema, updateFilingStatusSchema } from
 import type { Filing, PaginatedFilings } from '@gstflow/types';
 
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { Roles } from '../common/decorators/roles.decorator';
+import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
-import { STAFF_ROLES, type Actor } from '../common/auth/actor.types';
+import { type Actor } from '../common/auth/actor.types';
 import { FilingsService } from './filings.service';
 import {
   filingsQuerySchema,
@@ -16,11 +16,11 @@ import {
 } from './dto';
 
 @Controller('filings')
-@Roles(...STAFF_ROLES)
 export class FilingsController {
   constructor(private readonly filings: FilingsService) {}
 
   @Get()
+  @RequirePermissions('filings:read')
   async list(
     @CurrentUser() actor: Actor,
     @Query(new ZodValidationPipe(filingsQuerySchema)) query: FilingsQuery,
@@ -29,6 +29,7 @@ export class FilingsController {
   }
 
   @Post()
+  @RequirePermissions('filings:write')
   async create(
     @CurrentUser() actor: Actor,
     @Body(new ZodValidationPipe(createFilingSchema)) body: CreateFilingInput,
@@ -37,6 +38,7 @@ export class FilingsController {
   }
 
   @Patch(':id/status')
+  @RequirePermissions('filings:write')
   async updateStatus(
     @CurrentUser() actor: Actor,
     @Param('id') id: string,
@@ -46,6 +48,7 @@ export class FilingsController {
   }
 
   @Patch(':id')
+  @RequirePermissions('filings:write')
   async update(
     @CurrentUser() actor: Actor,
     @Param('id') id: string,

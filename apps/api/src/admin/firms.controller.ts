@@ -1,9 +1,8 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
-import { Role } from '@gstflow/types';
 import type { Firm, PaginatedFirms } from '@gstflow/types';
 import { createFirmSchema, updateFirmSchema } from '@gstflow/validation';
 
-import { Roles } from '../common/decorators/roles.decorator';
+import { RequireSuperAdmin } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import type { Actor } from '../common/auth/actor.types';
@@ -16,7 +15,7 @@ import {
 } from './dto';
 
 @Controller('admin/firms')
-@Roles(Role.SUPER_ADMIN)
+@RequireSuperAdmin()
 export class FirmsController {
   constructor(private readonly admin: AdminService) {}
 

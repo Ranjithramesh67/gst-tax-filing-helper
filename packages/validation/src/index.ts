@@ -6,3 +6,4 @@ export * from './filing';
 export * from './admin';
 export * from './payment';
 export * from './billing';
+export * from './rbac';

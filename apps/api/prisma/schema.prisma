@@ -11,11 +11,9 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  SUPER_ADMIN
-  FIRM_ADMIN
-  FILER
-  CLIENT
+enum RoleScope {
+  SYSTEM
+  FIRM
 }
 
 enum FirmStatus {
@@ -150,11 +148,42 @@ model Firm {
   auditLogs AuditLog[]
   payments  Payment[]
 
+  roles           Role[]
   billingInvoices BillingInvoice[]
   subscriptions   Subscription[]
   paymentRequests PaymentRequest[]
 
   @@index([status])
+}
+
+model Role {
+  id          String    @id @default(cuid())
+  key         String
+  name        String
+  description String?
+  scope       RoleScope @default(FIRM)
+  firmId      String?
+  isSystem    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  firm        Firm?            @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  permissions RolePermission[]
+  users       User[]
+
+  @@unique([firmId, key])
+  @@index([scope])
+}
+
+model RolePermission {
+  id         String @id @default(cuid())
+  roleId     String
+  permission String
+
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permission])
+  @@index([permission])
 }
 
 model User {
@@ -164,19 +193,20 @@ model User {
   name         String
   phone        String?
   passwordHash String
-  role         Role      @default(FILER)
+  roleId       String?
   isActive     Boolean   @default(true)
   lastLoginAt  DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
   firm              Firm?          @relation(fields: [firmId], references: [id], onDelete: SetNull)
+  role              Role?          @relation(fields: [roleId], references: [id], onDelete: SetNull)
   refreshTokens     RefreshToken[]
   uploadedDocuments Document[]     @relation("DocumentUploader")
   auditLogs         AuditLog[]
 
   @@index([firmId])
-  @@index([role])
+  @@index([roleId])
 }
 
 model RefreshToken {

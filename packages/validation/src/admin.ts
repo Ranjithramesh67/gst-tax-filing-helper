@@ -52,7 +52,8 @@ export const createUserSchema = z.object({
   name: z.string().trim().min(2).max(200),
   email: z.string().email(),
   password: passwordSchema,
-  role: roleSchema,
+  role: roleSchema.optional(),
+  roleId: z.string().trim().min(1).optional(),
   phone: phoneSchema.optional(),
   firmId: z.string().optional(),
 });
@@ -61,6 +62,7 @@ export const updateUserSchema = z.object({
   name: z.string().trim().min(2).max(200).optional(),
   phone: phoneSchema.optional(),
   role: roleSchema.optional(),
+  roleId: z.string().trim().min(1).optional(),
   isActive: z.boolean().optional(),
 });
 

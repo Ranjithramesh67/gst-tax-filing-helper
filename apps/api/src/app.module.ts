@@ -17,9 +17,10 @@ import { AdminModule } from './admin/admin.module';
 import { PublicModule } from './public/public.module';
 import { PaymentsModule } from './payments/payments.module';
 import { BillingModule } from './billing/billing.module';
+import { RbacModule } from './rbac/rbac.module';
 
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
-import { RolesGuard } from './common/guards/roles.guard';
+import { PermissionsGuard } from './common/guards/permissions.guard';
 import { JwtModule } from './common/jwt/jwt.module';
 
 @Module({
@@ -43,10 +44,11 @@ import { JwtModule } from './common/jwt/jwt.module';
     PublicModule,
     PaymentsModule,
     BillingModule,
+    RbacModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
-    { provide: APP_GUARD, useClass: RolesGuard },
+    { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
 })
 export class AppModule {}

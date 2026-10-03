@@ -10,12 +10,11 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { Role } from '@gstflow/types';
 import type { Document, PaginatedDocuments } from '@gstflow/types';
 import type { Response } from 'express';
 
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { Roles } from '../common/decorators/roles.decorator';
+import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import type { Actor } from '../common/auth/actor.types';
 import { DocumentsService } from './documents.service';
@@ -27,12 +26,12 @@ import {
   type UploadedDocumentFile,
 } from './dto';
 
-@Roles(Role.SUPER_ADMIN, Role.FIRM_ADMIN, Role.FILER)
 @Controller('documents')
 export class DocumentsController {
   constructor(private readonly documents: DocumentsService) {}
 
   @Post()
+  @RequirePermissions('documents:write')
   @UseInterceptors(FileInterceptor('file'))
   async upload(
     @CurrentUser() actor: Actor,
@@ -43,6 +42,7 @@ export class DocumentsController {
   }
 
   @Get()
+  @RequirePermissions('documents:read')
   async list(
     @CurrentUser() actor: Actor,
     @Query(new ZodValidationPipe(listDocumentsQuerySchema)) query: ListDocumentsQueryDto,
@@ -51,11 +51,13 @@ export class DocumentsController {
   }
 
   @Get(':id')
+  @RequirePermissions('documents:read')
   async get(@CurrentUser() actor: Actor, @Param('id') id: string): Promise<Document> {
     return this.documents.get(actor, id);
   }
 
   @Get(':id/download')
+  @RequirePermissions('documents:read')
   async download(
     @CurrentUser() actor: Actor,
     @Param('id') id: string,

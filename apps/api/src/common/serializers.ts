@@ -16,6 +16,7 @@ import type {
   PaymentLink,
   PaymentRequest,
   PublicPaymentRequest,
+  RoleDefinition,
   SmsMessage,
   Subscription,
   User,
@@ -73,11 +74,12 @@ export function serialiseUser(user: {
   email: string;
   name: string;
   phone?: string | null;
-  role: string;
+  roleId?: string | null;
   isActive: boolean;
   lastLoginAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  role?: { key: string; name: string } | null;
   firm?: { id: string; name: string; slug: string } | null;
 }): User {
   return {
@@ -86,12 +88,44 @@ export function serialiseUser(user: {
     email: user.email,
     name: user.name,
     phone: user.phone ?? null,
-    role: user.role as User['role'],
+    role: user.role?.key ?? 'NONE',
+    roleId: user.roleId ?? null,
+    roleName: user.role?.name ?? null,
     isActive: user.isActive,
     lastLoginAt: iso(user.lastLoginAt),
     createdAt: iso(user.createdAt)!,
     updatedAt: iso(user.updatedAt)!,
     firm: user.firm ?? null,
+  };
+}
+
+export function serialiseRole(role: {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  scope: string;
+  firmId: string | null;
+  isSystem: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  permissions?: { permission: string }[];
+  _count?: { users: number };
+  firm?: { id: string; name: string; slug: string } | null;
+}): RoleDefinition {
+  return {
+    id: role.id,
+    key: role.key,
+    name: role.name,
+    description: role.description ?? null,
+    scope: role.scope as RoleDefinition['scope'],
+    firmId: role.firmId ?? null,
+    isSystem: role.isSystem,
+    permissions: role.permissions?.map((p) => p.permission) ?? [],
+    createdAt: iso(role.createdAt)!,
+    updatedAt: iso(role.updatedAt)!,
+    ...(role._count ? { _count: role._count } : {}),
+    ...(role.firm ? { firm: role.firm } : {}),
   };
 }
 

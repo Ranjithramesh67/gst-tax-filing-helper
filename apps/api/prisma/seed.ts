@@ -1,16 +1,43 @@
-import { PrismaClient, Role } from '@prisma/client';
+import { PrismaClient, RoleScope } from '@prisma/client';
+import { SYSTEM_ROLE_DEFAULTS, SYSTEM_ROLE_LABELS } from '@gstflow/types';
 import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
+async function ensureSystemRole(key: string): Promise<{ id: string }> {
+  const name = SYSTEM_ROLE_LABELS[key] ?? key;
+  const existing = await prisma.role.findFirst({ where: { key, firmId: null } });
+  const role = existing
+    ? await prisma.role.update({
+        where: { id: existing.id },
+        data: { name, scope: RoleScope.SYSTEM, isSystem: true },
+      })
+    : await prisma.role.create({
+        data: { key, name, scope: RoleScope.SYSTEM, isSystem: true, firmId: null },
+      });
+
+  await prisma.rolePermission.deleteMany({ where: { roleId: role.id } });
+  const permissions = SYSTEM_ROLE_DEFAULTS[key] ?? [];
+  if (permissions.length) {
+    await prisma.rolePermission.createMany({
+      data: permissions.map((permission) => ({ roleId: role.id, permission })),
+    });
+  }
+  return role;
+}
+
 async function main(): Promise<void> {
+  const superAdminRole = await ensureSystemRole('SUPER_ADMIN');
+  const firmAdminRole = await ensureSystemRole('FIRM_ADMIN');
+  const filerRole = await ensureSystemRole('FILER');
+
   const superAdmin = await prisma.user.upsert({
     where: { email: 'superadmin@gstflow.local' },
-    update: {},
+    update: { roleId: superAdminRole.id },
     create: {
       email: 'superadmin@gstflow.local',
       name: 'Platform Owner',
-      role: Role.SUPER_ADMIN,
+      roleId: superAdminRole.id,
       passwordHash: await bcrypt.hash('Admin@12345', 10),
       isActive: true,
     },
@@ -30,11 +57,11 @@ async function main(): Promise<void> {
 
   const firmAdmin = await prisma.user.upsert({
     where: { email: 'admin@sharma.local' },
-    update: {},
+    update: { roleId: firmAdminRole.id },
     create: {
       email: 'admin@sharma.local',
       name: 'Priya Sharma',
-      role: Role.FIRM_ADMIN,
+      roleId: firmAdminRole.id,
       firmId: firm.id,
       phone: '+919876500002',
       passwordHash: await bcrypt.hash('Firm@12345', 10),
@@ -43,11 +70,11 @@ async function main(): Promise<void> {
 
   const filer = await prisma.user.upsert({
     where: { email: 'filer@sharma.local' },
-    update: {},
+    update: { roleId: filerRole.id },
     create: {
       email: 'filer@sharma.local',
       name: 'Rahul Verma',
-      role: Role.FILER,
+      roleId: filerRole.id,
       firmId: firm.id,
       phone: '+919876500003',
       passwordHash: await bcrypt.hash('Filer@12345', 10),

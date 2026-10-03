@@ -14,7 +14,9 @@ import type {
   CreatePaymentBody,
   CreatePaymentRequestBody,
   CreateReleaseBody,
+  CreateRoleBody,
   CreateSubscriptionBody,
+  CreateTeamMemberBody,
   CreateUserBody,
   Device,
   DeviceRegisterBody,
@@ -23,6 +25,8 @@ import type {
   Firm,
   FirmBillingSummary,
   FirmBranding,
+  FirmPermissionsResponse,
+  FirmRolesResponse,
   GstReturn,
   Invoice,
   ListBillingInvoicesQuery,
@@ -30,6 +34,7 @@ import type {
   ListPaymentRequestsQuery,
   ListPaymentsQuery,
   ListQuery,
+  ListRolesQuery,
   ListSmsQuery,
   LoginBody,
   MarkPaymentRequestPaidBody,
@@ -47,14 +52,18 @@ import type {
   PaginatedPayments,
   PaginatedReleases,
   PaginatedReturns,
+  PaginatedRoles,
   PaginatedSms,
+  PaginatedTeam,
   PaginatedUsers,
   Payment,
   PaymentLink,
   PaymentLinkBody,
   PaymentRequest,
+  PermissionCatalog,
   PublicPaymentRequest,
   ReceivablesResponse,
+  RoleDefinition,
   SmsIngestBody,
   SmsIngestResponse,
   SmsMessage,
@@ -65,7 +74,9 @@ import type {
   UpdateFilingStatusBody,
   UpdateFirmBody,
   UpdatePaymentBody,
+  UpdateRoleBody,
   UpdateSubscriptionBody,
+  UpdateTeamMemberBody,
   UpdateUserBody,
   User,
 } from '@gstflow/types';
@@ -198,7 +209,34 @@ export class GstFlowApi {
       this.http.get<PublicPaymentRequest>(`/public/payment-requests/${id}`),
   };
 
+  firm = {
+    permissions: () => this.http.get<FirmPermissionsResponse>('/firm/permissions'),
+    roles: {
+      list: () => this.http.get<FirmRolesResponse>('/firm/roles'),
+      create: (body: CreateRoleBody) => this.http.post<RoleDefinition>('/firm/roles', body),
+      update: (id: string, body: UpdateRoleBody) =>
+        this.http.patch<RoleDefinition>(`/firm/roles/${id}`, body),
+      remove: (id: string) => this.http.del<{ success: boolean }>(`/firm/roles/${id}`),
+    },
+    team: {
+      list: (query?: ListQuery) => this.http.get<PaginatedTeam>('/firm/users', query),
+      create: (body: CreateTeamMemberBody) => this.http.post<User>('/firm/users', body),
+      update: (id: string, body: UpdateTeamMemberBody) =>
+        this.http.patch<User>(`/firm/users/${id}`, body),
+    },
+  };
+
   admin = {
+    permissions: () => this.http.get<PermissionCatalog>('/admin/permissions'),
+    roles: {
+      list: (query?: ListRolesQuery) =>
+        this.http.get<PaginatedRoles>('/admin/roles', query),
+      get: (id: string) => this.http.get<RoleDefinition>(`/admin/roles/${id}`),
+      create: (body: CreateRoleBody) => this.http.post<RoleDefinition>('/admin/roles', body),
+      update: (id: string, body: UpdateRoleBody) =>
+        this.http.patch<RoleDefinition>(`/admin/roles/${id}`, body),
+      remove: (id: string) => this.http.del<{ success: boolean }>(`/admin/roles/${id}`),
+    },
     firms: {
       list: (query?: ListQuery) => this.http.get<PaginatedFirms>('/admin/firms', query),
       get: (id: string) => this.http.get<Firm>(`/admin/firms/${id}`),

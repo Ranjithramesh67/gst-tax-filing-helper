@@ -10,6 +10,12 @@ export const Role = {
 } as const;
 export type Role = (typeof Role)[keyof typeof Role];
 
+export const RoleScope = {
+  SYSTEM: 'SYSTEM',
+  FIRM: 'FIRM',
+} as const;
+export type RoleScope = (typeof RoleScope)[keyof typeof RoleScope];
+
 export const FirmStatus = {
   ACTIVE: 'ACTIVE',
   SUSPENDED: 'SUSPENDED',

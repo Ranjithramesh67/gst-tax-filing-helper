@@ -6,7 +6,6 @@ import type {
   PaymentLink,
   ReceivablesResponse,
 } from '@gstflow/types';
-import { Role } from '@gstflow/types';
 import {
   createPaymentSchema,
   listPaymentsQuerySchema,
@@ -15,9 +14,9 @@ import {
 } from '@gstflow/validation';
 
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { Roles } from '../common/decorators/roles.decorator';
+import { RequirePermissions, RequireSuperAdmin } from '../common/decorators/permissions.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
-import { STAFF_ROLES, type Actor } from '../common/auth/actor.types';
+import { type Actor } from '../common/auth/actor.types';
 import { PaymentsService } from './payments.service';
 import type {
   CreatePaymentInput,
@@ -27,11 +26,11 @@ import type {
 } from './dto';
 
 @Controller('payments')
-@Roles(...STAFF_ROLES)
 export class PaymentsController {
   constructor(private readonly payments: PaymentsService) {}
 
   @Get()
+  @RequirePermissions('payments:read')
   async list(
     @CurrentUser() actor: Actor,
     @Query(new ZodValidationPipe(listPaymentsQuerySchema)) query: ListPaymentsQuery,
@@ -40,11 +39,13 @@ export class PaymentsController {
   }
 
   @Get('receivables')
+  @RequirePermissions('payments:read')
   async receivables(@CurrentUser() actor: Actor): Promise<ReceivablesResponse> {
     return this.payments.receivables(actor);
   }
 
   @Patch(':id')
+  @RequirePermissions('payments:manage')
   async update(
     @CurrentUser() actor: Actor,
     @Param('id') id: string,
@@ -54,6 +55,7 @@ export class PaymentsController {
   }
 
   @Delete(':id')
+  @RequirePermissions('payments:manage')
   async remove(
     @CurrentUser() actor: Actor,
     @Param('id') id: string,
@@ -62,6 +64,7 @@ export class PaymentsController {
   }
 
   @Post(':id/links')
+  @RequirePermissions('payments:manage')
   async addLink(
     @CurrentUser() actor: Actor,
     @Param('id') id: string,
@@ -71,6 +74,7 @@ export class PaymentsController {
   }
 
   @Delete(':id/links/:linkId')
+  @RequirePermissions('payments:manage')
   async removeLink(
     @CurrentUser() actor: Actor,
     @Param('id') id: string,
@@ -81,11 +85,11 @@ export class PaymentsController {
 }
 
 @Controller('filings')
-@Roles(...STAFF_ROLES)
 export class FilingPaymentsController {
   constructor(private readonly payments: PaymentsService) {}
 
   @Get(':id/payments')
+  @RequirePermissions('payments:read')
   async list(
     @CurrentUser() actor: Actor,
     @Param('id') id: string,
@@ -94,6 +98,7 @@ export class FilingPaymentsController {
   }
 
   @Post(':id/payments')
+  @RequirePermissions('payments:manage')
   async create(
     @CurrentUser() actor: Actor,
     @Param('id') id: string,
@@ -104,7 +109,7 @@ export class FilingPaymentsController {
 }
 
 @Controller('admin')
-@Roles(Role.SUPER_ADMIN)
+@RequireSuperAdmin()
 export class BillingAdminController {
   constructor(private readonly payments: PaymentsService) {}
 

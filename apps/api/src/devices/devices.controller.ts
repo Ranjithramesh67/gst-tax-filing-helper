@@ -3,9 +3,10 @@ import { Role } from '@gstflow/types';
 import type { Device } from '@gstflow/types';
 
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
-import { STAFF_ROLES, type Actor } from '../common/auth/actor.types';
+import { type Actor } from '../common/auth/actor.types';
 import { DevicesService } from './devices.service';
 import {
   deviceRegisterBodySchema,
@@ -18,8 +19,8 @@ import {
 export class DevicesController {
   constructor(private readonly devices: DevicesService) {}
 
-  @Roles(...STAFF_ROLES)
   @Get()
+  @RequirePermissions('devices:read')
   async list(
     @CurrentUser() actor: Actor,
     @Query(new ZodValidationPipe(listDevicesQuerySchema)) query: ListDevicesQuery,
@@ -27,13 +28,14 @@ export class DevicesController {
     return this.devices.list(actor, query);
   }
 
-  @Roles(...STAFF_ROLES)
   @Get(':id')
+  @RequirePermissions('devices:read')
   async get(@CurrentUser() actor: Actor, @Param('id') id: string): Promise<Device> {
     return this.devices.get(actor, id);
   }
 
-  @Roles(Role.CLIENT, ...STAFF_ROLES)
+  @Roles(Role.CLIENT)
+  @RequirePermissions('devices:manage')
   @Post('register')
   async register(
     @CurrentUser() actor: Actor,
@@ -42,7 +44,8 @@ export class DevicesController {
     return this.devices.register(actor, body);
   }
 
-  @Roles(Role.CLIENT, ...STAFF_ROLES)
+  @Roles(Role.CLIENT)
+  @RequirePermissions('devices:manage')
   @Post(':id/revoke')
   async revoke(@CurrentUser() actor: Actor, @Param('id') id: string): Promise<Device> {
     return this.devices.revoke(actor, id);

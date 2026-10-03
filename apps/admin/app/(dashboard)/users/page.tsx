@@ -3,8 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search } from 'lucide-react';
-import { Role } from '@gstflow/types';
-import type { CreateUserBody, User } from '@gstflow/types';
+import type { CreateUserBody, RoleDefinition, User } from '@gstflow/types';
 import { api } from '@/lib/api';
 import {
   Badge,
@@ -22,23 +21,11 @@ import {
 
 const PAGE_SIZE = 10;
 
-const ROLE_OPTIONS: Array<{ value: Role; label: string }> = [
-  { value: Role.FIRM_ADMIN, label: 'Firm admin' },
-  { value: Role.FILER, label: 'Filer' },
-];
-
-const ROLE_LABELS: Record<string, string> = {
-  SUPER_ADMIN: 'Super admin',
-  FIRM_ADMIN: 'Firm admin',
-  FILER: 'Filer',
-  CLIENT: 'Client',
-};
-
 interface CreateFormState {
   name: string;
   email: string;
   password: string;
-  role: Role;
+  roleId: string;
   firmId: string;
   phone: string;
 }
@@ -47,7 +34,7 @@ const EMPTY_FORM: CreateFormState = {
   name: '',
   email: '',
   password: '',
-  role: Role.FIRM_ADMIN,
+  roleId: '',
   firmId: '',
   phone: '',
 };
@@ -59,14 +46,19 @@ function formatDate(value?: string | null): string {
   return date.toLocaleString();
 }
 
-function roleTone(role: Role) {
-  if (role === Role.FIRM_ADMIN) return 'info' as const;
-  if (role === Role.SUPER_ADMIN) return 'warning' as const;
+function roleTone(role?: string | null) {
+  if (role === 'SUPER_ADMIN') return 'warning' as const;
+  if (role === 'FIRM_ADMIN') return 'info' as const;
   return 'neutral' as const;
 }
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function roleLabel(role: RoleDefinition | undefined): string {
+  if (!role) return '';
+  return role.firm ? `${role.name} (${role.firm.name})` : role.name;
 }
 
 export default function UsersPage() {
@@ -94,6 +86,11 @@ export default function UsersPage() {
   const firmsQuery = useQuery({
     queryKey: ['admin', 'firms', 'options'],
     queryFn: () => api.admin.firms.list({ pageSize: 200 }),
+  });
+
+  const rolesQuery = useQuery({
+    queryKey: ['admin', 'roles', 'options'],
+    queryFn: () => api.admin.roles.list({ pageSize: 200 }),
   });
 
   const usersQuery = useQuery({
@@ -133,6 +130,16 @@ export default function UsersPage() {
     },
   });
 
+  const roleMutation = useMutation({
+    mutationFn: (vars: { id: string; roleId: string }) =>
+      api.admin.users.update(vars.id, { roleId: vars.roleId }),
+    onSuccess: () => {
+      setActionError(null);
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+    },
+    onError: (error) => setActionError(errorMessage(error, 'Failed to change role.')),
+  });
+
   function updateField<K extends keyof CreateFormState>(key: K, value: CreateFormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
@@ -145,17 +152,19 @@ export default function UsersPage() {
       name: form.name.trim(),
       email: form.email.trim(),
       password: form.password,
-      role: form.role,
+      roleId: form.roleId || undefined,
       firmId: form.firmId || undefined,
       phone: form.phone.trim() || undefined,
     });
   }
 
   const firms = firmsQuery.data?.items ?? [];
+  const roles = rolesQuery.data?.items ?? [];
   const users = usersQuery.data?.items ?? [];
   const totalPages = usersQuery.data?.totalPages ?? 0;
   const total = usersQuery.data?.total ?? 0;
   const togglingId = toggleMutation.isPending ? toggleMutation.variables?.id : undefined;
+  const changingRoleId = roleMutation.isPending ? roleMutation.variables?.id : undefined;
 
   return (
     <div>
@@ -198,23 +207,23 @@ export default function UsersPage() {
                 maxLength={128}
               />
             </Field>
-            <Field label="Role">
+            <Field label="Role" hint={rolesQuery.isError ? 'Could not load roles.' : undefined}>
               <Select
-                value={form.role}
-                onChange={(e) => updateField('role', e.target.value as Role)}
-                required
+                value={form.roleId}
+                onChange={(e) => updateField('roleId', e.target.value)}
+                disabled={rolesQuery.isLoading}
               >
-                {ROLE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
+                <option value="">
+                  {rolesQuery.isLoading ? 'Loading roles...' : 'Default (Filer)'}
+                </option>
+                {roles.map((role) => (
+                  <option key={role.id} value={role.id}>
+                    {roleLabel(role)}
                   </option>
                 ))}
               </Select>
             </Field>
-            <Field
-              label="Firm"
-              hint={firmsQuery.isError ? 'Could not load firms.' : undefined}
-            >
+            <Field label="Firm" hint={firmsQuery.isError ? 'Could not load firms.' : undefined}>
               <Select
                 value={form.firmId}
                 onChange={(e) => updateField('firmId', e.target.value)}
@@ -262,7 +271,7 @@ export default function UsersPage() {
           }
         />
 
-        <div className="grid grid-cols-1 gap-3 border-b border-slate-200 px-4 py-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 border-b border-ink-600 px-4 py-3 sm:grid-cols-3">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <Input
@@ -280,9 +289,9 @@ export default function UsersPage() {
             }}
           >
             <option value="">All roles</option>
-            {ROLE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
+            {roles.map((role) => (
+              <option key={role.id} value={role.key}>
+                {roleLabel(role)}
               </option>
             ))}
           </Select>
@@ -304,7 +313,7 @@ export default function UsersPage() {
         </div>
 
         {actionError ? (
-          <p className="border-b border-slate-200 px-4 py-2 text-sm text-red-600">{actionError}</p>
+          <p className="border-b border-ink-600 px-4 py-2 text-sm text-red-600">{actionError}</p>
         ) : null}
 
         {usersQuery.isLoading ? (
@@ -331,7 +340,7 @@ export default function UsersPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                <tr className="border-b border-ink-600 text-xs uppercase tracking-wide text-slate-500">
                   <th className="px-4 py-3 font-medium">Name</th>
                   <th className="px-4 py-3 font-medium">Email</th>
                   <th className="px-4 py-3 font-medium">Role</th>
@@ -343,15 +352,34 @@ export default function UsersPage() {
               </thead>
               <tbody>
                 {users.map((user) => (
-                  <tr key={user.id} className="border-b border-slate-100 last:border-0">
-                    <td className="px-4 py-3 font-medium text-slate-800">{user.name}</td>
-                    <td className="px-4 py-3 text-slate-600">{user.email}</td>
+                  <tr key={user.id} className="border-b border-ink-700 last:border-0">
+                    <td className="px-4 py-3 font-medium text-slate-100">{user.name}</td>
+                    <td className="px-4 py-3 text-slate-400">{user.email}</td>
                     <td className="px-4 py-3">
-                      <Badge tone={roleTone(user.role)}>
-                        {ROLE_LABELS[user.role] ?? user.role}
-                      </Badge>
+                      <div className="flex flex-col gap-1">
+                        <Badge tone={roleTone(user.role)}>
+                          {user.roleName ?? user.role}
+                        </Badge>
+                        <Select
+                          value={user.roleId ?? ''}
+                          onChange={(e) =>
+                            roleMutation.mutate({ id: user.id, roleId: e.target.value })
+                          }
+                          disabled={roleMutation.isPending}
+                          className={cn(
+                            'px-2 py-1 text-xs',
+                            changingRoleId === user.id && 'opacity-50',
+                          )}
+                        >
+                          {roles.map((role) => (
+                            <option key={role.id} value={role.id}>
+                              {role.name}
+                            </option>
+                          ))}
+                        </Select>
+                      </div>
                     </td>
-                    <td className="px-4 py-3 text-slate-600">{user.firm?.name ?? '-'}</td>
+                    <td className="px-4 py-3 text-slate-400">{user.firm?.name ?? '-'}</td>
                     <td className="px-4 py-3">
                       <Badge tone={user.isActive ? 'success' : 'danger'}>
                         {user.isActive ? 'Active' : 'Inactive'}
@@ -376,7 +404,7 @@ export default function UsersPage() {
         )}
 
         {totalPages > 1 ? (
-          <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3">
+          <div className="flex items-center justify-between border-t border-ink-600 px-4 py-3">
             <span className="text-xs text-slate-500">
               Page {page} of {totalPages}
             </span>

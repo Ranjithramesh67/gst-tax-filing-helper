@@ -1,9 +1,8 @@
 import { Body, Controller, Get, Post, Query } from '@nestjs/common';
-import { Role } from '@gstflow/types';
 import type { AppRelease, PaginatedReleases } from '@gstflow/types';
 import { createReleaseSchema } from '@gstflow/validation';
 
-import { Roles } from '../common/decorators/roles.decorator';
+import { RequireSuperAdmin } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import type { Actor } from '../common/auth/actor.types';
@@ -15,7 +14,7 @@ import {
 } from './dto';
 
 @Controller('admin/releases')
-@Roles(Role.SUPER_ADMIN)
+@RequireSuperAdmin()
 export class ReleasesController {
   constructor(private readonly admin: AdminService) {}
 

@@ -7,7 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Role, OtpPurpose } from '@gstflow/types';
-import type { DeviceRegisterBody, OtpVerifyResponse } from '@gstflow/types';
+import type { AuthUser, DeviceRegisterBody, OtpVerifyResponse } from '@gstflow/types';
 import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 
@@ -16,6 +16,7 @@ import { CryptoService } from '../common/crypto/crypto.service';
 import { AuditService } from '../common/audit/audit.service';
 import { CONSENT_VERSION } from '../common/constants';
 import type { Actor } from '../common/auth/actor.types';
+import { toSystemRole } from '../common/auth/actor.types';
 import { actorToPayload, type TokenPair } from './auth.types';
 
 export interface OtpRequestResult {
@@ -131,13 +132,16 @@ export class AuthService {
     ip?: string,
     firmSlug?: string,
   ): Promise<{ tokens: TokenPair; actor: Actor }> {
-    const user = await this.prisma.user.findUnique({ where: { email }, include: { firm: true } });
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      include: { firm: true, role: { include: { permissions: true } } },
+    });
     if (!user || !user.isActive) throw new UnauthorizedException('Invalid credentials');
 
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) throw new UnauthorizedException('Invalid credentials');
 
-    if (firmSlug && user.role !== Role.SUPER_ADMIN) {
+    if (firmSlug && user.role?.key !== Role.SUPER_ADMIN) {
       const userSlug = user.firm?.slug?.toLowerCase();
       if (!userSlug || userSlug !== firmSlug.toLowerCase()) {
         throw new UnauthorizedException('Invalid firm or credentials');
@@ -145,14 +149,7 @@ export class AuthService {
     }
 
     await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
-    const actor: Actor = {
-      userId: user.id,
-      role: user.role,
-      firmId: user.firmId,
-      clientId: null,
-      email: user.email,
-      name: user.name,
-    };
+    const actor: Actor = buildStaffActor(user);
     const tokens = await this.issueTokens(actor);
     await this.audit.record({
       actorId: user.id,
@@ -235,6 +232,11 @@ export class AuthService {
     const actor: Actor = {
       userId: client.id,
       role: Role.CLIENT,
+      roleId: null,
+      roleKey: Role.CLIENT,
+      roleName: 'Client',
+      isSuperAdmin: false,
+      permissions: [],
       firmId: client.firmId,
       clientId: client.id,
       name: client.name,
@@ -284,18 +286,14 @@ export class AuthService {
     }
 
     const user = stored.userId
-      ? await this.prisma.user.findUnique({ where: { id: stored.userId } })
+      ? await this.prisma.user.findUnique({
+          where: { id: stored.userId },
+          include: { role: { include: { permissions: true } } },
+        })
       : null;
     let actor: Actor;
     if (user) {
-      actor = {
-        userId: user.id,
-        role: user.role,
-        firmId: user.firmId,
-        clientId: null,
-        email: user.email,
-        name: user.name,
-      };
+      actor = buildStaffActor(user);
     } else {
       const client = stored.clientId
         ? await this.prisma.client.findUnique({ where: { id: stored.clientId } })
@@ -304,6 +302,11 @@ export class AuthService {
       actor = {
         userId: client.id,
         role: Role.CLIENT,
+        roleId: null,
+        roleKey: Role.CLIENT,
+        roleName: 'Client',
+        isSuperAdmin: false,
+        permissions: [],
         firmId: client.firmId,
         clientId: client.id,
         name: client.name,
@@ -326,28 +329,38 @@ export class AuthService {
     return { success: true };
   }
 
-  async me(actor: Actor): Promise<{ id: string; role: Role; firmId: string | null; clientId: string | null; email?: string; name?: string }> {
+  async me(actor: Actor): Promise<AuthUser> {
     if (actor.role === Role.CLIENT) {
       const client = await this.prisma.client.findUnique({ where: { id: actor.userId } });
       if (!client) throw new UnauthorizedException('Client not found');
       return {
         id: client.id,
-        role: Role.CLIENT,
-        firmId: client.firmId,
-        clientId: client.id,
-        email: client.email ?? undefined,
+        email: client.email ?? '',
         name: client.name,
+        role: Role.CLIENT,
+        roleId: null,
+        roleName: 'Client',
+        isSuperAdmin: false,
+        permissions: [],
+        firmId: client.firmId,
       };
     }
-    const user = await this.prisma.user.findUnique({ where: { id: actor.userId } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: actor.userId },
+      include: { role: { include: { permissions: true } } },
+    });
     if (!user) throw new UnauthorizedException('User not found');
+    const staff = buildStaffActor(user);
     return {
       id: user.id,
-      role: user.role,
-      firmId: user.firmId,
-      clientId: null,
       email: user.email,
       name: user.name,
+      role: staff.roleKey,
+      roleId: staff.roleId,
+      roleName: staff.roleName,
+      isSuperAdmin: staff.isSuperAdmin,
+      permissions: staff.permissions,
+      firmId: user.firmId,
     };
   }
 
@@ -357,6 +370,36 @@ export class AuthService {
 }
 
 // --- serialisers keep the API shape aligned with @gstflow/types (ISO strings) ---
+
+interface StaffUserWithRole {
+  id: string;
+  firmId: string | null;
+  email: string;
+  name: string;
+  roleId: string | null;
+  role: {
+    key: string;
+    name: string;
+    permissions: { permission: string }[];
+  } | null;
+}
+
+export function buildStaffActor(user: StaffUserWithRole): Actor {
+  const roleKey = user.role?.key ?? null;
+  return {
+    userId: user.id,
+    role: toSystemRole(roleKey),
+    roleId: user.roleId,
+    roleKey: roleKey ?? 'NONE',
+    roleName: user.role?.name ?? null,
+    isSuperAdmin: roleKey === Role.SUPER_ADMIN,
+    permissions: user.role?.permissions.map((p) => p.permission) ?? [],
+    firmId: user.firmId,
+    clientId: null,
+    email: user.email,
+    name: user.name,
+  };
+}
 
 function serialiseClient(client: {
   id: string;

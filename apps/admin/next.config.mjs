@@ -3,6 +3,7 @@ const API_PROXY_TARGET = process.env.API_PROXY_TARGET ?? 'http://localhost:4000'
 
 const nextConfig = {
   reactStrictMode: true,
+  basePath: '/admin',
   transpilePackages: ['@gstflow/api-client', '@gstflow/types', '@gstflow/validation'],
   async rewrites() {
     return [

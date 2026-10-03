@@ -3,18 +3,18 @@ import { createInvoiceSchema } from '@gstflow/validation';
 import type { Invoice, PaginatedInvoices } from '@gstflow/types';
 
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { Roles } from '../common/decorators/roles.decorator';
+import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
-import { STAFF_ROLES, type Actor } from '../common/auth/actor.types';
+import { type Actor } from '../common/auth/actor.types';
 import { FilingsService } from './filings.service';
 import { invoicesQuerySchema, type CreateInvoiceInput, type InvoicesQuery } from './dto';
 
 @Controller('invoices')
-@Roles(...STAFF_ROLES)
 export class InvoicesController {
   constructor(private readonly filings: FilingsService) {}
 
   @Get()
+  @RequirePermissions('invoices:read')
   async list(
     @CurrentUser() actor: Actor,
     @Query(new ZodValidationPipe(invoicesQuerySchema)) query: InvoicesQuery,
@@ -23,6 +23,7 @@ export class InvoicesController {
   }
 
   @Post()
+  @RequirePermissions('invoices:write')
   async create(
     @CurrentUser() actor: Actor,
     @Body(new ZodValidationPipe(createInvoiceSchema)) body: CreateInvoiceInput,

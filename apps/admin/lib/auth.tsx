@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from 'react';
 import type { AuthUser } from '@gstflow/types';
 import { api, tokenStore } from './api';
+import { withBasePath } from './basePath';
 
 interface AuthState {
   user: AuthUser | null;
@@ -51,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (refresh) void api.auth.logout(refresh).catch(() => undefined);
     tokenStore.clear();
     setUser(null);
-    if (typeof window !== 'undefined') window.location.href = '/login';
+    if (typeof window !== 'undefined') window.location.href = withBasePath('/login');
   }, []);
 
   const value = useMemo<AuthState>(

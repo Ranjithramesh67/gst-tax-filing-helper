@@ -6,7 +6,7 @@ import {
   otpVerifySchema,
   refreshSchema,
 } from '@gstflow/validation';
-import { OtpPurpose, Role } from '@gstflow/types';
+import { OtpPurpose } from '@gstflow/types';
 import type { AuthResponse, AuthUser } from '@gstflow/types';
 
 import { Public } from '../common/decorators/public.decorator';
@@ -83,9 +83,8 @@ export class AuthController {
   }
 
   @Get('me')
-  async me(@CurrentUser() actor: Actor): Promise<AuthUser | { id: string; role: Role; name?: string }> {
-    const me = await this.auth.me(actor);
-    return me as unknown as AuthUser;
+  async me(@CurrentUser() actor: Actor): Promise<AuthUser> {
+    return this.auth.me(actor);
   }
 }
 
@@ -94,7 +93,11 @@ function toAuthUser(actor: Actor): AuthUser {
     id: actor.userId,
     email: actor.email ?? '',
     name: actor.name ?? '',
-    role: actor.role,
+    role: actor.roleKey,
+    roleId: actor.roleId,
+    roleName: actor.roleName,
+    isSuperAdmin: actor.isSuperAdmin,
+    permissions: actor.permissions,
     firmId: actor.firmId,
   };
 }
