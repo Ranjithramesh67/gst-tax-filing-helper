@@ -52,6 +52,15 @@ android {
         buildConfig true
     }
 
+    signingConfigs {
+        debug {
+            // Sign with every scheme for the widest device compatibility.
+            enableV1Signing true
+            enableV2Signing true
+            enableV3Signing true
+        }
+    }
+
     buildTypes {
         debug {
             // Uses the auto-generated debug keystore provided by AGP.
