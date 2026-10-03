@@ -26,10 +26,16 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async login(
-    @Body(new ZodValidationPipe(loginSchema)) body: { email: string; password: string },
+    @Body(new ZodValidationPipe(loginSchema))
+    body: { email: string; password: string; firmSlug?: string },
     @Req() req: Request,
   ): Promise<AuthResponse> {
-    const { tokens, actor } = await this.auth.login(body.email, body.password, ipOf(req));
+    const { tokens, actor } = await this.auth.login(
+      body.email,
+      body.password,
+      ipOf(req),
+      body.firmSlug,
+    );
     return { ...tokens, user: toAuthUser(actor) };
   }
 

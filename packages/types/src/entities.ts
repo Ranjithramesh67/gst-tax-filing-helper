@@ -4,6 +4,8 @@ import {
   DocumentType,
   FilingStatus,
   FirmStatus,
+  PaymentMethod,
+  PaymentStatus,
   ReleaseChannel,
   ReturnType,
   Role,
@@ -18,10 +20,28 @@ export interface Firm {
   gstin?: string | null;
   email?: string | null;
   phone?: string | null;
+  logoUrl?: string | null;
+  brandColor?: string | null;
+  supportEmail?: string | null;
+  supportPhone?: string | null;
+  address?: string | null;
+  defaultFilingFee?: number | null;
   status: FirmStatus;
   createdAt: string;
   updatedAt: string;
-  _count?: { clients: number; users: number };
+  _count?: { clients: number; users: number; payments?: number };
+}
+
+export interface FirmBranding {
+  name: string;
+  slug: string;
+  logoUrl?: string | null;
+  brandColor?: string | null;
+  supportEmail?: string | null;
+  supportPhone?: string | null;
+  address?: string | null;
+  defaultFilingFee?: number | null;
+  status: FirmStatus;
 }
 
 export interface User {
@@ -158,12 +178,168 @@ export interface Filing {
   type: ReturnType;
   period: string;
   status: FilingStatus;
+  feeAmount?: number | null;
+  paidAmount?: number;
+  balanceAmount?: number;
+  paymentState?: PaymentState;
   filedById?: string | null;
   filedAt?: string | null;
   referenceNo?: string | null;
   notes?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export type PaymentState = 'NONE' | 'UNPAID' | 'PARTIAL' | 'PAID';
+
+export interface PaymentLink {
+  id: string;
+  paymentId: string;
+  label: string;
+  url: string;
+  createdAt: string;
+}
+
+export interface Payment {
+  id: string;
+  firmId: string;
+  clientId: string;
+  filingId?: string | null;
+  invoiceId?: string | null;
+  amount: number;
+  status: PaymentStatus;
+  method?: PaymentMethod | null;
+  paidAt?: string | null;
+  reference?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  links?: PaymentLink[];
+  client?: Pick<Client, 'id' | 'name'>;
+}
+
+export interface ClientReceivable {
+  clientId: string;
+  clientName: string;
+  billed: number;
+  collected: number;
+  outstanding: number;
+  filingsCount: number;
+}
+
+export interface FirmReceivable extends ClientReceivable {
+  firmId: string;
+  firmName: string;
+}
+
+export interface FirmBillingSummary {
+  firmId: string;
+  firmName: string;
+  slug: string;
+  billed: number;
+  collected: number;
+  outstanding: number;
+  filingsCount: number;
+  paymentsCount: number;
+}
+
+export type BillingInvoiceStatus =
+  | 'DRAFT'
+  | 'ISSUED'
+  | 'PARTIAL'
+  | 'PAID'
+  | 'VOID';
+
+export type BillingInvoiceType = 'PER_FILING' | 'CUMULATIVE' | 'SUBSCRIPTION';
+
+export type BillingCycle = 'MONTHLY' | 'QUARTERLY' | 'HALF_YEARLY' | 'YEARLY';
+
+export type PaymentRequestProvider = 'MANUAL' | 'CASHFREE';
+
+export interface BillingInvoiceItem {
+  id: string;
+  invoiceId: string;
+  filingId?: string | null;
+  description: string;
+  amount: number;
+  createdAt: string;
+}
+
+export interface BillingInvoice {
+  id: string;
+  firmId: string;
+  clientId: string;
+  number: string;
+  type: BillingInvoiceType;
+  status: BillingInvoiceStatus;
+  issueDate: string;
+  dueDate?: string | null;
+  subtotal: number;
+  total: number;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  items?: BillingInvoiceItem[];
+  client?: Pick<Client, 'id' | 'name'>;
+  paid?: number;
+  outstanding?: number;
+}
+
+export interface Subscription {
+  id: string;
+  firmId: string;
+  clientId: string;
+  amount: number;
+  cycle: BillingCycle;
+  startDate: string;
+  nextDueDate: string;
+  active: boolean;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  client?: Pick<Client, 'id' | 'name'>;
+}
+
+export interface PaymentRequest {
+  id: string;
+  firmId: string;
+  clientId: string;
+  invoiceId?: string | null;
+  filingId?: string | null;
+  amount: number;
+  description?: string | null;
+  status: PaymentStatus;
+  provider: PaymentRequestProvider;
+  providerRef?: string | null;
+  url?: string | null;
+  expiresAt?: string | null;
+  paidAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  client?: Pick<Client, 'id' | 'name'>;
+  firm?: { id: string; name: string; slug: string } | null;
+}
+
+export interface PublicPaymentRequest {
+  id: string;
+  amount: number;
+  description?: string | null;
+  status: PaymentStatus;
+  provider: PaymentRequestProvider;
+  url?: string | null;
+  expiresAt?: string | null;
+  paidAt?: string | null;
+  clientName?: string | null;
+  invoiceNumber?: string | null;
+  firm: {
+    id: string;
+    name: string;
+    slug: string;
+    logoUrl?: string | null;
+    brandColor?: string | null;
+    supportEmail?: string | null;
+    supportPhone?: string | null;
+  };
 }
 
 export interface AppRelease {

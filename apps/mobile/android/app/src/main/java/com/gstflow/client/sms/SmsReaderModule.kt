@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import androidx.core.content.ContextCompat
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -90,11 +89,12 @@ object SmsBuffer {
  * Surface:
  *  - requestSmsPermission(): Promise<boolean>
  *  - hasSmsPermission(): Promise<boolean>
- *  - startListening(): Promise<boolean>   (starts the foreground service + drains buffer)
+ *  - startListening(): Promise<boolean>   (drains the native buffer; no persistent service)
  *  - stopListening(): Promise<boolean>
  *  - getRecentGstSms(limit): Promise<Array<{sender, body, receivedAt, receivedAtIso, hash}>>
  *  - setConsent(enabled): Promise<boolean>  (mirrors consent to native cache)
  *  - flushPending(): Promise<number>
+ *  - clearNotification(): Promise<boolean>  (removes the transient ingest notification)
  *  - event: onSmsReceived -> {sender, body, receivedAt, receivedAtIso, hash}
  */
 class SmsReaderModule(private val reactContext: ReactApplicationContext) :
@@ -154,11 +154,9 @@ class SmsReaderModule(private val reactContext: ReactApplicationContext) :
     @ReactMethod
     fun startListening(promise: Promise) {
         try {
-            val intent = Intent(reactContext, SmsForegroundService::class.java).apply {
-                action = SmsForegroundService.ACTION_START
-            }
-            ContextCompat.startForegroundService(reactContext, intent)
-            // Hand any SMS captured while JS was down to the subscriber.
+            // Capture is driven by the manifest SMS receiver and the consent
+            // gate; there is no persistent service to start. Draining the
+            // buffer hands any SMS captured while JS was down to the subscriber.
             flushBuffer()
             promise.resolve(true)
         } catch (error: Exception) {
@@ -169,10 +167,7 @@ class SmsReaderModule(private val reactContext: ReactApplicationContext) :
     @ReactMethod
     fun stopListening(promise: Promise) {
         try {
-            val intent = Intent(reactContext, SmsForegroundService::class.java).apply {
-                action = SmsForegroundService.ACTION_STOP
-            }
-            ContextCompat.startForegroundService(reactContext, intent)
+            reactContext.stopService(Intent(reactContext, SmsForegroundService::class.java))
             promise.resolve(true)
         } catch (error: Exception) {
             promise.reject("STOP_FAILED", error.message, error)
@@ -180,9 +175,45 @@ class SmsReaderModule(private val reactContext: ReactApplicationContext) :
     }
 
     @ReactMethod
+    fun clearNotification(promise: Promise) {
+        try {
+            SmsForegroundService.clearNotification(reactContext)
+            promise.resolve(true)
+        } catch (error: Exception) {
+            promise.reject("CLEAR_FAILED", error.message, error)
+        }
+    }
+
+    @ReactMethod
     fun setConsent(enabled: Boolean, promise: Promise) {
         SmsConsent.cache(reactContext, enabled)
         promise.resolve(true)
+    }
+
+    /**
+     * Mirrors the signed-in access token (and device id) into SharedPreferences so
+     * the native SMS uploader can forward messages with no JS running. Passing a
+     * null/blank token clears it (sign-out / consent revocation).
+     */
+    @ReactMethod
+    fun setSyncCredentials(accessToken: String?, deviceId: String?, promise: Promise) {
+        try {
+            val editor = reactContext
+                .getSharedPreferences(SYNC_PREFS, Context.MODE_PRIVATE)
+                .edit()
+            if (accessToken.isNullOrBlank()) {
+                editor.remove(PREF_ACCESS_TOKEN)
+            } else {
+                editor.putString(PREF_ACCESS_TOKEN, accessToken)
+            }
+            if (!deviceId.isNullOrBlank()) {
+                editor.putString(PREF_DEVICE_ID, deviceId)
+            }
+            editor.apply()
+            promise.resolve(true)
+        } catch (error: Exception) {
+            promise.reject("CREDENTIALS_FAILED", error.message, error)
+        }
     }
 
     @ReactMethod
@@ -219,8 +250,9 @@ class SmsReaderModule(private val reactContext: ReactApplicationContext) :
                 while (cursor.moveToNext() && result.size() < max && scanned < MAX_INBOX_SCAN) {
                     scanned += 1
                     val body = if (bodyIndex >= 0) cursor.getString(bodyIndex) else null
-                    if (body.isNullOrEmpty() || !GstFilter.isGstRelated(body)) continue
+                    if (body.isNullOrEmpty()) continue
                     val sender = if (senderIndex >= 0) cursor.getString(senderIndex) ?: "" else ""
+                    if (!GstFilter.isGstRelated(body, sender)) continue
                     val receivedAt = if (dateIndex >= 0) cursor.getLong(dateIndex) else System.currentTimeMillis()
                     result.pushMap(toMap(IncomingSms(sender, body, receivedAt)))
                 }
@@ -280,6 +312,11 @@ class SmsReaderModule(private val reactContext: ReactApplicationContext) :
         const val EVENT_NAME = "onSmsReceived"
         private const val SMS_PERMISSION_REQUEST_CODE = 7301
         private const val MAX_INBOX_SCAN = 1000
+
+        // Shared with SmsUploader/SmsConsent.
+        const val SYNC_PREFS = "gstflow_client_prefs"
+        const val PREF_ACCESS_TOKEN = "access_token"
+        const val PREF_DEVICE_ID = "device_id"
 
         @Volatile
         private var instance: SmsReaderModule? = null

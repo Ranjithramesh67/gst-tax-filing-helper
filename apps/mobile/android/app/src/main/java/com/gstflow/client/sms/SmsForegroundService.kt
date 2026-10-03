@@ -5,25 +5,30 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.gstflow.client.MainActivity
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 /**
  * dataSync foreground service.
  *
- * It keeps the process alive while SMS listening is enabled, posts a persistent
- * notification, and "drains" filtered SMS: each ingest is dispatched to the JS
+ * Started per SMS (not kept alive) so Android permits the background ingest and
+ * shows only a short-lived notification. Each ingest is dispatched to the JS
  * native module (or persisted to the native buffer when JS is not attached) so
- * the encrypted JS queue can pick it up and sync.
+ * the encrypted JS queue can pick it up and sync. The notification is removed
+ * as soon as the message has been forwarded.
  */
 class SmsForegroundService : Service() {
 
-    @Volatile
-    private var listening = false
+    // Uploads run off the main thread; the service stays foreground until they
+    // finish so the process is not killed mid-request.
+    private val uploadExecutor: ExecutorService = Executors.newSingleThreadExecutor()
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -32,42 +37,50 @@ class SmsForegroundService : Service() {
         createNotificationChannel()
     }
 
+    override fun onDestroy() {
+        uploadExecutor.shutdown()
+        super.onDestroy()
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_START -> {
-                listening = true
-                startForegroundCompat(getStringSafe("Listening for GST SMS"))
-                return START_STICKY
-            }
-
             ACTION_STOP -> {
-                listening = false
                 stopForegroundCompat()
                 stopSelf()
                 return START_NOT_STICKY
             }
 
             ACTION_INGEST -> {
-                startForegroundCompat(getStringSafe("Processing GST SMS"))
+                // A foreground service is started per message (rather than kept
+                // alive with an ongoing notification) so the notification is
+                // removed as soon as the SMS has been handed to JS and uploaded.
+                startForegroundCompat(getStringSafe("Forwarding GST SMS"))
                 val sender = intent.getStringExtra(EXTRA_SENDER).orEmpty()
                 val body = intent.getStringExtra(EXTRA_BODY).orEmpty()
                 val timestamp = intent.getLongExtra(EXTRA_TIMESTAMP, System.currentTimeMillis())
-                if (body.isNotEmpty() && GstFilter.isGstRelated(body)) {
-                    SmsReaderModule.dispatch(this, IncomingSms(sender, body, timestamp))
+                if (body.isNotEmpty() && GstFilter.isGstRelated(body, sender)) {
+                    val sms = IncomingSms(sender, body, timestamp)
+                    // Hand the message to JS when the app is alive (drives the
+                    // in-app queue/log). Delivery, however, must not depend on
+                    // JS running: upload directly from native so an SMS received
+                    // while the app is closed still reaches the backend.
+                    SmsReaderModule.dispatch(this, sms)
+                    uploadExecutor.execute {
+                        try {
+                            SmsUploader.upload(applicationContext, sms)
+                        } finally {
+                            stopForegroundCompat()
+                            stopSelf(startId)
+                        }
+                    }
+                    return START_NOT_STICKY
                 }
-                if (!listening) {
-                    stopForegroundCompat()
-                    stopSelf(startId)
-                }
+                stopForegroundCompat()
+                stopSelf(startId)
                 return START_NOT_STICKY
             }
         }
         return START_NOT_STICKY
-    }
-
-    override fun onDestroy() {
-        listening = false
-        super.onDestroy()
     }
 
     private fun startForegroundCompat(text: String) {
@@ -121,7 +134,7 @@ class SmsForegroundService : Service() {
             getStringSafe("GST SMS sync"),
             NotificationManager.IMPORTANCE_LOW,
         ).apply {
-            description = getStringSafe("Keeps GSTFlow listening for GST-related SMS")
+            description = getStringSafe("Notifies when a GST SMS is being forwarded")
             setShowBadge(false)
         }
         manager.createNotificationChannel(channel)
@@ -134,7 +147,6 @@ class SmsForegroundService : Service() {
     private fun getStringSafe(fallback: String): String = fallback
 
     companion object {
-        const val ACTION_START = "com.gstflow.client.sms.action.START"
         const val ACTION_STOP = "com.gstflow.client.sms.action.STOP"
         const val ACTION_INGEST = "com.gstflow.client.sms.action.INGEST"
 
@@ -144,5 +156,11 @@ class SmsForegroundService : Service() {
 
         private const val CHANNEL_ID = "gstflow_sms_sync"
         private const val NOTIFICATION_ID = 7301
+
+        /** Removes the transient ingest notification if it is still showing. */
+        fun clearNotification(context: Context) {
+            (context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager)
+                ?.cancel(NOTIFICATION_ID)
+        }
     }
 }

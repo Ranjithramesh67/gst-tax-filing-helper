@@ -1,6 +1,8 @@
 import type {
   AppRelease,
   AuditLog,
+  BillingInvoice,
+  BillingInvoiceItem,
   Client,
   ConsentRecord,
   Device,
@@ -10,7 +12,12 @@ import type {
   GstReturn,
   Invoice,
   ParsedGstData,
+  Payment,
+  PaymentLink,
+  PaymentRequest,
+  PublicPaymentRequest,
   SmsMessage,
+  Subscription,
   User,
 } from '@gstflow/types';
 
@@ -29,10 +36,16 @@ export function serialiseFirm(firm: {
   gstin: string | null;
   email: string | null;
   phone: string | null;
+  logoUrl?: string | null;
+  brandColor?: string | null;
+  supportEmail?: string | null;
+  supportPhone?: string | null;
+  address?: string | null;
+  defaultFilingFee?: number | null;
   status: string;
   createdAt: Date;
   updatedAt: Date;
-  _count?: { clients: number; users: number };
+  _count?: { clients: number; users: number; payments?: number };
 }): Firm {
   return {
     id: firm.id,
@@ -41,6 +54,12 @@ export function serialiseFirm(firm: {
     gstin: firm.gstin,
     email: firm.email,
     phone: firm.phone,
+    logoUrl: firm.logoUrl ?? null,
+    brandColor: firm.brandColor ?? null,
+    supportEmail: firm.supportEmail ?? null,
+    supportPhone: firm.supportPhone ?? null,
+    address: firm.address ?? null,
+    defaultFilingFee: firm.defaultFilingFee ?? null,
     status: firm.status as Firm['status'],
     createdAt: iso(firm.createdAt)!,
     updatedAt: iso(firm.updatedAt)!,
@@ -309,13 +328,20 @@ export function serialiseFiling(filing: {
   type: string;
   period: string;
   status: string;
+  feeAmount?: number | null;
   filedById: string | null;
   filedAt: Date | null;
   referenceNo: string | null;
   notes: string | null;
   createdAt: Date;
   updatedAt: Date;
+  payments?: { amount: number; status: string }[];
 }): Filing {
+  const fee = filing.feeAmount ?? null;
+  const paid = (filing.payments ?? [])
+    .filter((p) => p.status === 'COMPLETED')
+    .reduce((sum, p) => sum + p.amount, 0);
+  const paymentState = derivePaymentState(fee, paid);
   return {
     id: filing.id,
     clientId: filing.clientId,
@@ -323,12 +349,78 @@ export function serialiseFiling(filing: {
     type: filing.type as Filing['type'],
     period: filing.period,
     status: filing.status as Filing['status'],
+    feeAmount: fee,
+    paidAmount: paid,
+    balanceAmount: fee == null ? 0 : Math.max(0, fee - paid),
+    paymentState,
     filedById: filing.filedById,
     filedAt: iso(filing.filedAt),
     referenceNo: filing.referenceNo,
     notes: filing.notes,
     createdAt: iso(filing.createdAt)!,
     updatedAt: iso(filing.updatedAt)!,
+  };
+}
+
+export function derivePaymentState(
+  fee: number | null | undefined,
+  paid: number,
+): Filing['paymentState'] {
+  if (fee == null) return 'NONE';
+  if (paid <= 0) return 'UNPAID';
+  if (paid < fee) return 'PARTIAL';
+  return 'PAID';
+}
+
+export function serialisePaymentLink(link: {
+  id: string;
+  paymentId: string;
+  label: string;
+  url: string;
+  createdAt: Date;
+}): PaymentLink {
+  return {
+    id: link.id,
+    paymentId: link.paymentId,
+    label: link.label,
+    url: link.url,
+    createdAt: iso(link.createdAt)!,
+  };
+}
+
+export function serialisePayment(payment: {
+  id: string;
+  firmId: string;
+  clientId: string;
+  filingId: string | null;
+  invoiceId?: string | null;
+  amount: number;
+  status: string;
+  method: string | null;
+  paidAt: Date | null;
+  reference: string | null;
+  notes: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  links?: Parameters<typeof serialisePaymentLink>[0][];
+  client?: { id: string; name: string } | null;
+}): Payment {
+  return {
+    id: payment.id,
+    firmId: payment.firmId,
+    clientId: payment.clientId,
+    filingId: payment.filingId,
+    invoiceId: payment.invoiceId ?? null,
+    amount: payment.amount,
+    status: payment.status as Payment['status'],
+    method: (payment.method as Payment['method']) ?? null,
+    paidAt: iso(payment.paidAt),
+    reference: payment.reference,
+    notes: payment.notes,
+    createdAt: iso(payment.createdAt)!,
+    updatedAt: iso(payment.updatedAt)!,
+    links: payment.links ? payment.links.map(serialisePaymentLink) : undefined,
+    client: payment.client ?? undefined,
   };
 }
 
@@ -379,5 +471,177 @@ export function serialiseAudit(log: {
     meta: (log.meta as Record<string, unknown> | null) ?? null,
     ip: log.ip,
     createdAt: iso(log.createdAt)!,
+  };
+}
+
+export function serialiseBillingInvoiceItem(item: {
+  id: string;
+  invoiceId: string;
+  filingId: string | null;
+  description: string;
+  amount: number;
+  createdAt: Date;
+}): BillingInvoiceItem {
+  return {
+    id: item.id,
+    invoiceId: item.invoiceId,
+    filingId: item.filingId,
+    description: item.description,
+    amount: item.amount,
+    createdAt: iso(item.createdAt)!,
+  };
+}
+
+export function serialiseBillingInvoice(invoice: {
+  id: string;
+  firmId: string;
+  clientId: string;
+  number: string;
+  type: string;
+  status: string;
+  issueDate: Date;
+  dueDate: Date | null;
+  subtotal: number;
+  total: number;
+  notes: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  items?: Parameters<typeof serialiseBillingInvoiceItem>[0][];
+  client?: { id: string; name: string } | null;
+  paid?: number;
+}): BillingInvoice {
+  const paid = invoice.paid ?? 0;
+  return {
+    id: invoice.id,
+    firmId: invoice.firmId,
+    clientId: invoice.clientId,
+    number: invoice.number,
+    type: invoice.type as BillingInvoice['type'],
+    status: invoice.status as BillingInvoice['status'],
+    issueDate: iso(invoice.issueDate)!,
+    dueDate: iso(invoice.dueDate),
+    subtotal: invoice.subtotal,
+    total: invoice.total,
+    notes: invoice.notes,
+    createdAt: iso(invoice.createdAt)!,
+    updatedAt: iso(invoice.updatedAt)!,
+    items: invoice.items ? invoice.items.map(serialiseBillingInvoiceItem) : undefined,
+    client: invoice.client ?? undefined,
+    paid,
+    outstanding: Math.max(0, invoice.total - paid),
+  };
+}
+
+export function serialiseSubscription(subscription: {
+  id: string;
+  firmId: string;
+  clientId: string;
+  amount: number;
+  cycle: string;
+  startDate: Date;
+  nextDueDate: Date;
+  active: boolean;
+  notes: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  client?: { id: string; name: string } | null;
+}): Subscription {
+  return {
+    id: subscription.id,
+    firmId: subscription.firmId,
+    clientId: subscription.clientId,
+    amount: subscription.amount,
+    cycle: subscription.cycle as Subscription['cycle'],
+    startDate: iso(subscription.startDate)!,
+    nextDueDate: iso(subscription.nextDueDate)!,
+    active: subscription.active,
+    notes: subscription.notes,
+    createdAt: iso(subscription.createdAt)!,
+    updatedAt: iso(subscription.updatedAt)!,
+    client: subscription.client ?? undefined,
+  };
+}
+
+export function serialisePaymentRequest(request: {
+  id: string;
+  firmId: string;
+  clientId: string;
+  invoiceId: string | null;
+  filingId: string | null;
+  amount: number;
+  description: string | null;
+  status: string;
+  provider: string;
+  providerRef: string | null;
+  url: string | null;
+  expiresAt: Date | null;
+  paidAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  client?: { id: string; name: string } | null;
+  firm?: { id: string; name: string; slug: string } | null;
+}): PaymentRequest {
+  return {
+    id: request.id,
+    firmId: request.firmId,
+    clientId: request.clientId,
+    invoiceId: request.invoiceId,
+    filingId: request.filingId,
+    amount: request.amount,
+    description: request.description,
+    status: request.status as PaymentRequest['status'],
+    provider: request.provider as PaymentRequest['provider'],
+    providerRef: request.providerRef,
+    url: request.url,
+    expiresAt: iso(request.expiresAt),
+    paidAt: iso(request.paidAt),
+    createdAt: iso(request.createdAt)!,
+    updatedAt: iso(request.updatedAt)!,
+    client: request.client ?? undefined,
+    firm: request.firm ?? undefined,
+  };
+}
+
+export function serialisePublicPaymentRequest(request: {
+  id: string;
+  amount: number;
+  description: string | null;
+  status: string;
+  provider: string;
+  url: string | null;
+  expiresAt: Date | null;
+  paidAt: Date | null;
+  client?: { name: string } | null;
+  invoice?: { number: string } | null;
+  firm: {
+    id: string;
+    name: string;
+    slug: string;
+    logoUrl: string | null;
+    brandColor: string | null;
+    supportEmail: string | null;
+    supportPhone: string | null;
+  };
+}): PublicPaymentRequest {
+  return {
+    id: request.id,
+    amount: request.amount,
+    description: request.description,
+    status: request.status as PublicPaymentRequest['status'],
+    provider: request.provider as PublicPaymentRequest['provider'],
+    url: request.url,
+    expiresAt: iso(request.expiresAt),
+    paidAt: iso(request.paidAt),
+    clientName: request.client?.name ?? null,
+    invoiceNumber: request.invoice?.number ?? null,
+    firm: {
+      id: request.firm.id,
+      name: request.firm.name,
+      slug: request.firm.slug,
+      logoUrl: request.firm.logoUrl,
+      brandColor: request.firm.brandColor,
+      supportEmail: request.firm.supportEmail,
+      supportPhone: request.firm.supportPhone,
+    },
   };
 }

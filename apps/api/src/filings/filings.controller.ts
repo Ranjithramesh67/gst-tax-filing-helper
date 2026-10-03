@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
-import { createFilingSchema, updateFilingStatusSchema } from '@gstflow/validation';
+import { createFilingSchema, updateFilingSchema, updateFilingStatusSchema } from '@gstflow/validation';
 import type { Filing, PaginatedFilings } from '@gstflow/types';
 
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -11,6 +11,7 @@ import {
   filingsQuerySchema,
   type CreateFilingInput,
   type FilingsQuery,
+  type UpdateFilingInput,
   type UpdateFilingStatusInput,
 } from './dto';
 
@@ -42,5 +43,14 @@ export class FilingsController {
     @Body(new ZodValidationPipe(updateFilingStatusSchema)) body: UpdateFilingStatusInput,
   ): Promise<Filing> {
     return this.filings.updateFilingStatus(actor, id, body);
+  }
+
+  @Patch(':id')
+  async update(
+    @CurrentUser() actor: Actor,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(updateFilingSchema)) body: UpdateFilingInput,
+  ): Promise<Filing> {
+    return this.filings.updateFiling(actor, id, body);
   }
 }

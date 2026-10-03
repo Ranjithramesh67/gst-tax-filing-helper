@@ -127,13 +127,22 @@ export class SmsService {
         body.items.map((item) => item.deviceId).filter((id): id is string => Boolean(id)),
       ),
     ];
-    const allowedDevices = new Set<string>();
+    // Clients send either the Device id or its hardware androidId. Resolve both
+    // to the canonical Device id so the FK is valid and the ownership check holds.
+    const deviceByKey = new Map<string, string>();
     if (deviceIds.length > 0) {
       const devices = await this.prisma.device.findMany({
-        where: { clientId, id: { in: deviceIds }, revoked: false },
-        select: { id: true },
+        where: {
+          clientId,
+          revoked: false,
+          OR: [{ id: { in: deviceIds } }, { androidId: { in: deviceIds } }],
+        },
+        select: { id: true, androidId: true },
       });
-      for (const device of devices) allowedDevices.add(device.id);
+      for (const device of devices) {
+        deviceByKey.set(device.id, device.id);
+        deviceByKey.set(device.androidId, device.id);
+      }
     }
 
     let accepted = 0;
@@ -143,7 +152,8 @@ export class SmsService {
     const ids: string[] = [];
 
     for (const item of body.items) {
-      if (item.deviceId && !allowedDevices.has(item.deviceId)) {
+      const canonicalDeviceId = item.deviceId ? deviceByKey.get(item.deviceId) : undefined;
+      if (item.deviceId && !canonicalDeviceId) {
         rejected += 1;
         continue;
       }
@@ -158,7 +168,7 @@ export class SmsService {
         const created = await this.prisma.smsMessage.create({
           data: {
             clientId,
-            deviceId: item.deviceId ?? null,
+            deviceId: canonicalDeviceId ?? null,
             sender: item.sender,
             bodyEncrypted: this.crypto.encrypt(item.body),
             receivedAt,

@@ -14,6 +14,9 @@ import { SmsModule } from './sms/sms.module';
 import { DocumentsModule } from './documents/documents.module';
 import { FilingsModule } from './filings/filings.module';
 import { AdminModule } from './admin/admin.module';
+import { PublicModule } from './public/public.module';
+import { PaymentsModule } from './payments/payments.module';
+import { BillingModule } from './billing/billing.module';
 
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -37,6 +40,9 @@ import { JwtModule } from './common/jwt/jwt.module';
     DocumentsModule,
     FilingsModule,
     AdminModule,
+    PublicModule,
+    PaymentsModule,
+    BillingModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

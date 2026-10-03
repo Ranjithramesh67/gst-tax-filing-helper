@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ApiError } from '@gstflow/api-client';
 import type { SmsIngestItem, SmsIngestResponse } from '@gstflow/types';
+import { SmsReader } from '@/native/SmsReader';
 import { api } from './api';
 import * as queue from './smsQueue';
 
@@ -25,6 +26,8 @@ const SESSION_STORAGE_KEYS = [
 
 const DEVICE_ID_STORAGE_KEY = 'gstflow.mobile.deviceId';
 
+export const LAST_SYNC_STORAGE_KEY = 'gstflow.mobile.lastSyncTime';
+
 const BATCH_SIZE = 100;
 const MAX_ATTEMPTS = 5;
 const BASE_BACKOFF_MS = 1000;
@@ -38,6 +41,46 @@ export interface SyncResult {
   sent: number;
   skipped?: SyncSkipReason;
   error?: string;
+}
+
+/**
+ * Fired whenever a sync cycle completes successfully, from either the manual
+ * button or the background auto-sync loop. Screens use this to mark drained
+ * entries as "Sent" and to refresh the "Last sync" timestamp, so a background
+ * sync is visible without the user tapping anything.
+ */
+export interface SyncEvent {
+  at: string;
+  sent: queue.QueuedSms[];
+  sentCount: number;
+}
+
+type SyncListener = (event: SyncEvent) => void;
+
+const syncListeners = new Set<SyncListener>();
+
+export function subscribeSync(listener: SyncListener): () => void {
+  syncListeners.add(listener);
+  return () => {
+    syncListeners.delete(listener);
+  };
+}
+
+async function markSynced(sent: queue.QueuedSms[]): Promise<void> {
+  const at = new Date().toISOString();
+  try {
+    await AsyncStorage.setItem(LAST_SYNC_STORAGE_KEY, at);
+  } catch {
+    // A failed timestamp write must not fail the sync itself.
+  }
+  const event: SyncEvent = { at, sent, sentCount: sent.length };
+  for (const listener of syncListeners) {
+    try {
+      listener(event);
+    } catch {
+      // A misbehaving subscriber must not break the sync.
+    }
+  }
 }
 
 function delay(ms: number): Promise<void> {
@@ -151,12 +194,14 @@ export async function syncNow(): Promise<SyncResult> {
 
   const pending = await queue.list();
   if (pending.length === 0) {
+    await markSynced([]);
     return { ok: true, sent: 0, skipped: 'empty' };
   }
 
   const deviceId = (await AsyncStorage.getItem(DEVICE_ID_STORAGE_KEY)) ?? undefined;
   syncing = true;
   let sent = 0;
+  const sentItems: queue.QueuedSms[] = [];
   try {
     for (let offset = 0; offset < pending.length; offset += BATCH_SIZE) {
       const batch = pending.slice(offset, offset + BATCH_SIZE);
@@ -175,7 +220,16 @@ export async function syncNow(): Promise<SyncResult> {
       // A 2xx means the server accounted for the batch (accepted + duplicates);
       // rejected rows are malformed and must not be retried forever.
       await queue.remove(batch.map((entry) => entry.id));
+      sentItems.push(...batch);
       sent += response.accepted;
+    }
+    await markSynced(sentItems);
+    // The transient ingest notification has served its purpose once the batch
+    // reached the server.
+    try {
+      await SmsReader.clearNotification();
+    } catch {
+      void 0;
     }
     return { ok: true, sent };
   } catch (error) {
@@ -185,13 +239,23 @@ export async function syncNow(): Promise<SyncResult> {
   }
 }
 
+let autoSyncStop: (() => void) | null = null;
+
+/** Whether the app-lifetime auto-sync loop is currently running. */
+export function isAutoSyncActive(): boolean {
+  return autoSyncStop != null;
+}
+
 /**
  * Starts a periodic drain. Each tick re-checks the consent + session gates, so
- * revoking consent stops transport immediately.
+ * revoking consent stops transport immediately. Idempotent: repeated calls
+ * return the same stop function instead of stacking timers.
  *
  * @returns a function that stops the timer.
  */
 export function startAutoSync(intervalMs = 60_000): () => void {
+  if (autoSyncStop) return autoSyncStop;
+
   const interval = Math.max(intervalMs, MIN_AUTO_SYNC_INTERVAL_MS);
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -205,11 +269,15 @@ export function startAutoSync(intervalMs = 60_000): () => void {
     }
   };
 
-  void tick();
-
-  return () => {
+  const stop = (): void => {
     stopped = true;
     if (timer) clearTimeout(timer);
     timer = null;
+    if (autoSyncStop === stop) autoSyncStop = null;
   };
+
+  autoSyncStop = stop;
+  void tick();
+
+  return stop;
 }

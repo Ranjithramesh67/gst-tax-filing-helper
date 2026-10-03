@@ -13,6 +13,18 @@ def resolvedReactNativeDir = new File(
 ).getParentFile()
 def resolvedNodeModulesDir = resolvedReactNativeDir.getParentFile()
 
+// Remote JS bundle for the debug build. Override with
+// `-PjsBundleUrl=https://<preview-host>/mobile/index.android.bundle` when the
+// preview URL changes. Empty keeps the debug build on the bundled asset.
+def jsBundleUrl = project.findProperty("jsBundleUrl")
+    ?: "https://3000-5ffbba644f10a9c0.monkeycode-ai.live/mobile/index.android.bundle"
+
+// Backend base URL used by the native SMS uploader so captured messages can be
+// forwarded with no JS running. Override with `-PapiBaseUrl=...` if the preview
+// host changes.
+def apiBaseUrl = project.findProperty("apiBaseUrl")
+    ?: "https://3000-5ffbba644f10a9c0.monkeycode-ai.live/api"
+
 /**
  * React Native Gradle plugin configuration. Autolinking happens through the
  * React Gradle plugin (RN 0.75+), so no manual native_modules.gradle apply.
@@ -75,12 +87,19 @@ android {
     buildTypes {
         debug {
             // Uses the auto-generated debug keystore provided by AGP.
+            // Fetches JavaScript from the preview host at launch so updates do
+            // not require reinstalling the APK.
+            buildConfigField "String", "JS_BUNDLE_URL", "\"${jsBundleUrl}\""
+            buildConfigField "String", "API_BASE_URL", "\"${apiBaseUrl}\""
         }
         release {
             minifyEnabled enableProguardInReleaseBuilds
             // Sideload distribution: sign with the AGP-generated debug keystore so
             // the artifact is installable without managing a private release key.
             signingConfig signingConfigs.debug
+            // Release builds use the JavaScript bundled into the APK.
+            buildConfigField "String", "JS_BUNDLE_URL", "\"\""
+            buildConfigField "String", "API_BASE_URL", "\"${apiBaseUrl}\""
         }
     }
 

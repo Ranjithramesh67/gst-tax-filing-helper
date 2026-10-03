@@ -8,7 +8,7 @@ import { api, tokenStore } from './api';
 interface AuthState {
   user: AuthUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, firmSlug?: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -40,8 +40,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void refreshUser();
   }, [refreshUser]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const res = await api.auth.login({ email, password });
+  const login = useCallback(async (email: string, password: string, firmSlug?: string) => {
+    const res = await api.auth.login({ email, password, firmSlug });
     tokenStore.set(res.accessToken, res.refreshToken);
     setUser(res.user);
   }, []);
@@ -51,7 +51,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (refresh) void api.auth.logout(refresh).catch(() => undefined);
     tokenStore.clear();
     setUser(null);
-    if (typeof window !== 'undefined') window.location.href = '/login';
+    if (typeof window !== 'undefined') {
+      const segment = window.location.pathname.split('/').filter(Boolean)[0];
+      const reserved = new Set(['login', 'api', 'admin', '_next']);
+      window.location.href = segment && !reserved.has(segment) ? `/${segment}/login` : '/login';
+    }
   }, []);
 
   const value = useMemo<AuthState>(

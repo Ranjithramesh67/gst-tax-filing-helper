@@ -106,4 +106,113 @@ describe('GSTFlow API (e2e)', () => {
       await request(app.getHttpServer()).get('/v1/clients').expect(401);
     });
   });
+
+  describe('billing', () => {
+    let token: string;
+    let clientId: string;
+
+    beforeAll(async () => {
+      const res = await login(SEEDED.admin.email, SEEDED.admin.password);
+      token = res.body.accessToken;
+      const client = await request(app.getHttpServer())
+        .post('/v1/clients')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: `Billing Client ${Date.now()}`, phone: '+919812345672', stateCode: '29' })
+        .expect(201);
+      clientId = client.body.id;
+    });
+
+    const auth = () => ({ Authorization: `Bearer ${token}` });
+
+    it('runs an invoice from DRAFT to PAID through partial payment requests', async () => {
+      const invoice = await request(app.getHttpServer())
+        .post('/v1/billing/invoices')
+        .set(auth())
+        .send({
+          clientId,
+          type: 'CUMULATIVE',
+          items: [{ description: 'Retainer', amount: 1000 }],
+        })
+        .expect(201);
+      expect(invoice.body.status).toBe('DRAFT');
+      const invoiceId = invoice.body.id;
+
+      const issued = await request(app.getHttpServer())
+        .patch(`/v1/billing/invoices/${invoiceId}`)
+        .set(auth())
+        .send({ status: 'ISSUED' })
+        .expect(200);
+      expect(issued.body.status).toBe('ISSUED');
+
+      const partial = await request(app.getHttpServer())
+        .post('/v1/billing/payment-requests')
+        .set(auth())
+        .send({ invoiceId, amount: 400 })
+        .expect(201);
+      const publicView = await request(app.getHttpServer())
+        .get(`/v1/public/payment-requests/${partial.body.id}`)
+        .expect(200);
+      expect(publicView.body.amount).toBe(400);
+      expect(publicView.body.firm.name).toBeTruthy();
+
+      await request(app.getHttpServer())
+        .post(`/v1/billing/payment-requests/${partial.body.id}/mark-paid`)
+        .set(auth())
+        .send({ method: 'UPI', reference: 'UPI-E2E' })
+        .expect(201);
+
+      const afterPartial = await request(app.getHttpServer())
+        .get(`/v1/billing/invoices/${invoiceId}`)
+        .set(auth())
+        .expect(200);
+      expect(afterPartial.body.status).toBe('PARTIAL');
+      expect(afterPartial.body.paid).toBe(400);
+      expect(afterPartial.body.outstanding).toBe(600);
+
+      const rest = await request(app.getHttpServer())
+        .post('/v1/billing/payment-requests')
+        .set(auth())
+        .send({ invoiceId, amount: 600 })
+        .expect(201);
+      await request(app.getHttpServer())
+        .post(`/v1/billing/payment-requests/${rest.body.id}/mark-paid`)
+        .set(auth())
+        .send({ method: 'UPI' })
+        .expect(201);
+
+      const afterFull = await request(app.getHttpServer())
+        .get(`/v1/billing/invoices/${invoiceId}`)
+        .set(auth())
+        .expect(200);
+      expect(afterFull.body.status).toBe('PAID');
+      expect(afterFull.body.outstanding).toBe(0);
+    });
+
+    it('returns 404 for an invoice belonging to a client outside the firm', async () => {
+      await request(app.getHttpServer())
+        .post('/v1/billing/invoices')
+        .set(auth())
+        .send({ clientId: 'missing-client', items: [{ description: 'x', amount: 1 }] })
+        .expect(404);
+    });
+
+    it('creates and lists a subscription', async () => {
+      const created = await request(app.getHttpServer())
+        .post('/v1/billing/subscriptions')
+        .set(auth())
+        .send({ clientId, amount: 999, cycle: 'QUARTERLY' })
+        .expect(201);
+      expect(created.body.cycle).toBe('QUARTERLY');
+
+      const listed = await request(app.getHttpServer())
+        .get('/v1/billing/subscriptions')
+        .set(auth())
+        .expect(200);
+      expect(listed.body.some((s: { id: string }) => s.id === created.body.id)).toBe(true);
+    });
+
+    it('requires authentication for firm billing endpoints', async () => {
+      await request(app.getHttpServer()).get('/v1/billing/invoices').expect(401);
+    });
+  });
 });

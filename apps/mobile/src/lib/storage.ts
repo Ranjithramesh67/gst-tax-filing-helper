@@ -5,6 +5,7 @@ export const AUTH_STORAGE_KEY = 'gstflow.mobile.auth';
 export const CONSENT_STORAGE_KEY = 'gstflow.mobile.consent';
 export const SMS_QUEUE_STORAGE_KEY = 'gstflow.mobile.smsQueue';
 export const DEVICE_ID_STORAGE_KEY = 'gstflow.mobile.deviceId';
+export const READING_ENABLED_KEY = 'gstflow.mobile.readingEnabled';
 
 export interface StoredSession {
   accessToken: string;
@@ -92,4 +93,23 @@ export async function getStoredDeviceId(): Promise<string | null> {
 
 export async function setStoredDeviceId(id: string): Promise<void> {
   await AsyncStorage.setItem(DEVICE_ID_STORAGE_KEY, id);
+}
+
+/**
+ * Whether the user has background reading turned on. Defaults to true once
+ * consent exists, so existing installs keep reading until explicitly paused.
+ * The native receiver is gated by this mirrored flag, not by a running service.
+ */
+export async function getReadingEnabled(): Promise<boolean> {
+  const raw = await AsyncStorage.getItem(READING_ENABLED_KEY);
+  if (raw == null) return true;
+  return raw === 'true';
+}
+
+export async function setReadingEnabled(enabled: boolean): Promise<void> {
+  await AsyncStorage.setItem(READING_ENABLED_KEY, enabled ? 'true' : 'false');
+}
+
+export async function clearReadingEnabled(): Promise<void> {
+  await AsyncStorage.removeItem(READING_ENABLED_KEY);
 }

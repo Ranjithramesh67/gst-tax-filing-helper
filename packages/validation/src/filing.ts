@@ -18,6 +18,13 @@ export const createFilingSchema = z.object({
   returnId: z.string().optional(),
   type: returnTypeSchema,
   period: periodSchema,
+  feeAmount: z.coerce.number().nonnegative().max(1_000_000).optional(),
+  referenceNo: z.string().max(120).optional(),
+  notes: z.string().max(1000).optional(),
+});
+
+export const updateFilingSchema = z.object({
+  feeAmount: z.coerce.number().nonnegative().max(1_000_000).optional(),
   referenceNo: z.string().max(120).optional(),
   notes: z.string().max(1000).optional(),
 });

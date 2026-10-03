@@ -30,6 +30,8 @@ interface SmsReaderNativeModule {
   setConsent(enabled: boolean): Promise<boolean>;
   getRecentGstSms(limit: number): Promise<NativeSmsPayload[]>;
   flushPending(): Promise<number>;
+  clearNotification(): Promise<boolean>;
+  setSyncCredentials(accessToken: string | null, deviceId: string | null): Promise<boolean>;
   addListener?(eventName: string): void;
   removeListeners?(count: number): void;
 }
@@ -84,6 +86,20 @@ export const SmsReader = {
 
   flushPending(): Promise<number> {
     return nativeModule ? nativeModule.flushPending() : Promise.resolve(0);
+  },
+
+  /** Removes the transient SMS-ingest notification, if still showing. */
+  clearNotification(): Promise<boolean> {
+    return nativeModule ? nativeModule.clearNotification() : Promise.resolve(false);
+  },
+
+  /**
+   * Mirrors the signed-in access token (and device id) to native storage so the
+   * Android uploader can forward captured SMS while JS is not running. Pass null
+   * to clear on sign-out.
+   */
+  setSyncCredentials(accessToken: string | null, deviceId: string | null = null): Promise<boolean> {
+    return nativeModule ? nativeModule.setSyncCredentials(accessToken, deviceId) : Promise.resolve(false);
   },
 
   /** Subscribe to incoming GST SMS. Returns an unsubscribe function. */

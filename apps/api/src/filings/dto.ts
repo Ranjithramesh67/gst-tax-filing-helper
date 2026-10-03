@@ -5,6 +5,7 @@ import {
   createReturnSchema,
   filingStatusSchema,
   returnTypeSchema,
+  updateFilingSchema,
   updateFilingStatusSchema,
 } from '@gstflow/validation';
 import type { FilingStatus } from '@gstflow/types';
@@ -33,3 +34,4 @@ export type CreateInvoiceInput = z.infer<typeof createInvoiceSchema>;
 export type CreateReturnInput = z.infer<typeof createReturnSchema>;
 export type CreateFilingInput = z.infer<typeof createFilingSchema> & { status?: FilingStatus };
 export type UpdateFilingStatusInput = z.infer<typeof updateFilingStatusSchema>;
+export type UpdateFilingInput = z.infer<typeof updateFilingSchema>;

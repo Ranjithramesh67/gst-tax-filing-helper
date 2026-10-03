@@ -28,11 +28,13 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <Card className="w-full max-w-sm">
-        <div className="border-b border-slate-200 px-6 py-5">
-          <h1 className="text-lg font-semibold text-slate-900">GSTFlow Admin</h1>
-          <p className="mt-1 text-sm text-slate-500">Platform operator sign in</p>
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4">
+      <div className="pointer-events-none absolute -top-40 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-brand-500/20 blur-3xl" />
+      <div className="pointer-events-none absolute bottom-0 right-0 h-72 w-72 rounded-full bg-vibrant-purple/20 blur-3xl" />
+      <Card className="relative w-full max-w-sm">
+        <div className="border-b border-ink-600 px-6 py-5">
+          <h1 className="keera-text-gradient font-headline text-2xl font-bold">KeeRa</h1>
+          <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">Control Plane</p>
         </div>
         <form onSubmit={onSubmit} className="space-y-4 px-6 py-6">
           <Field label="Email">
@@ -46,11 +48,10 @@ export default function LoginPage() {
               required
             />
           </Field>
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
+          {error ? <p className="text-sm text-red-400">{error}</p> : null}
           <Button type="submit" className="w-full" disabled={submitting}>
             {submitting ? 'Signing in...' : 'Sign in'}
           </Button>
-          <p className="text-xs text-slate-400">Demo: superadmin@gstflow.local / Admin@12345</p>
         </form>
       </Card>
     </div>

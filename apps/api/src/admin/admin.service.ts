@@ -7,6 +7,7 @@ import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit/audit.service';
 import { parsePagination, paginate, type PaginationSlice } from '../common/pagination';
+import { assertSlugAllowed } from '../common/slug';
 import {
   serialiseAudit,
   serialiseFirm,
@@ -103,6 +104,7 @@ export class AdminService {
 
   async createFirm(input: CreateFirmInput, actor: Actor): Promise<Firm> {
     const slug = await this.uniqueSlug(input.slug ?? this.slugify(input.name));
+    assertSlugAllowed(slug);
     const firm = await this.prisma.firm.create({
       data: {
         name: input.name,
@@ -110,6 +112,12 @@ export class AdminService {
         gstin: input.gstin ?? null,
         email: input.email ?? null,
         phone: input.phone ?? null,
+        logoUrl: input.logoUrl ?? null,
+        brandColor: input.brandColor ?? null,
+        supportEmail: input.supportEmail ?? null,
+        supportPhone: input.supportPhone ?? null,
+        address: input.address ?? null,
+        defaultFilingFee: input.defaultFilingFee ?? null,
       },
     });
     await this.audit.recordAs(actor, {
@@ -123,13 +131,34 @@ export class AdminService {
 
   async updateFirm(id: string, input: UpdateFirmInput, actor: Actor): Promise<Firm> {
     await this.requireFirm(id);
+    let slug: string | undefined;
+    if (input.slug !== undefined) {
+      assertSlugAllowed(input.slug);
+      const existing = await this.prisma.firm.findUnique({
+        where: { slug: input.slug },
+        select: { id: true },
+      });
+      if (existing && existing.id !== id) {
+        throw new ConflictException('That path is already in use by another firm');
+      }
+      slug = input.slug;
+    }
     const firm = await this.prisma.firm.update({
       where: { id },
       data: {
         ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(slug !== undefined ? { slug } : {}),
         ...(input.gstin !== undefined ? { gstin: input.gstin } : {}),
         ...(input.email !== undefined ? { email: input.email } : {}),
         ...(input.phone !== undefined ? { phone: input.phone } : {}),
+        ...(input.logoUrl !== undefined ? { logoUrl: input.logoUrl } : {}),
+        ...(input.brandColor !== undefined ? { brandColor: input.brandColor } : {}),
+        ...(input.supportEmail !== undefined ? { supportEmail: input.supportEmail } : {}),
+        ...(input.supportPhone !== undefined ? { supportPhone: input.supportPhone } : {}),
+        ...(input.address !== undefined ? { address: input.address } : {}),
+        ...(input.defaultFilingFee !== undefined
+          ? { defaultFilingFee: input.defaultFilingFee }
+          : {}),
         ...(input.status !== undefined ? { status: input.status } : {}),
       },
     });

@@ -28,6 +28,7 @@ export const otpVerifySchema = z.object({
 export const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
+  firmSlug: z.string().trim().toLowerCase().max(60).optional(),
 });
 
 export const refreshSchema = z.object({

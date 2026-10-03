@@ -86,20 +86,73 @@ enum OtpPurpose {
   LOGIN
 }
 
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CASH
+  UPI
+  BANK_TRANSFER
+  CHEQUE
+  CARD
+  OTHER
+}
+
+enum BillingInvoiceStatus {
+  DRAFT
+  ISSUED
+  PARTIAL
+  PAID
+  VOID
+}
+
+enum BillingInvoiceType {
+  PER_FILING
+  CUMULATIVE
+  SUBSCRIPTION
+}
+
+enum BillingCycle {
+  MONTHLY
+  QUARTERLY
+  HALF_YEARLY
+  YEARLY
+}
+
+enum PaymentRequestProvider {
+  MANUAL
+  CASHFREE
+}
+
 model Firm {
-  id        String     @id @default(cuid())
-  name      String
-  slug      String     @unique
-  gstin     String?
-  email     String?
-  phone     String?
-  status    FirmStatus @default(ACTIVE)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id               String     @id @default(cuid())
+  name             String
+  slug             String     @unique
+  gstin            String?
+  email            String?
+  phone            String?
+  logoUrl          String?
+  brandColor       String?
+  supportEmail     String?
+  supportPhone     String?
+  address          String?
+  defaultFilingFee Float?
+  status           FirmStatus @default(ACTIVE)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
 
   users     User[]
   clients   Client[]
   auditLogs AuditLog[]
+  payments  Payment[]
+
+  billingInvoices BillingInvoice[]
+  subscriptions   Subscription[]
+  paymentRequests PaymentRequest[]
 
   @@index([status])
 }
@@ -158,15 +211,20 @@ model Client {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  firm        Firm           @relation(fields: [firmId], references: [id], onDelete: Cascade)
-  devices     Device[]
-  consents    ConsentRecord[]
-  smsMessages SmsMessage[]
-  documents   Document[]
-  invoices    Invoice[]
-  returns     GstReturn[]
-  filings     Filing[]
+  firm          Firm            @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  devices       Device[]
+  consents      ConsentRecord[]
+  smsMessages   SmsMessage[]
+  documents     Document[]
+  invoices      Invoice[]
+  returns       GstReturn[]
+  filings       Filing[]
   refreshTokens RefreshToken[]
+  payments      Payment[]
+
+  billingInvoices BillingInvoice[]
+  subscriptions   Subscription[]
+  paymentRequests PaymentRequest[]
 
   @@index([firmId, status])
   @@index([gstin])
@@ -247,32 +305,32 @@ model SmsMessage {
 }
 
 model ParsedGstData {
-  id            String   @id @default(cuid())
-  smsMessageId  String   @unique
-  gstin         String?
-  invoiceNo     String?
-  amount        Float?
-  taxableValue  Float?
-  taxAmount     Float?
-  hsn           String?
-  dueDate       DateTime?
-  confidence    Float    @default(0)
-  rawJson       Json?
+  id           String    @id @default(cuid())
+  smsMessageId String    @unique
+  gstin        String?
+  invoiceNo    String?
+  amount       Float?
+  taxableValue Float?
+  taxAmount    Float?
+  hsn          String?
+  dueDate      DateTime?
+  confidence   Float     @default(0)
+  rawJson      Json?
 
   smsMessage SmsMessage @relation(fields: [smsMessageId], references: [id], onDelete: Cascade)
 }
 
 model Document {
-  id            String       @id @default(cuid())
-  clientId      String
-  smsMessageId  String?
-  type          DocumentType @default(OTHER)
-  fileName      String
-  mimeType      String
-  size          Int
-  storageKey    String
-  uploadedById  String?
-  createdAt     DateTime     @default(now())
+  id           String       @id @default(cuid())
+  clientId     String
+  smsMessageId String?
+  type         DocumentType @default(OTHER)
+  fileName     String
+  mimeType     String
+  size         Int
+  storageKey   String
+  uploadedById String?
+  createdAt    DateTime     @default(now())
 
   client     Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
   smsMessage SmsMessage? @relation(fields: [smsMessageId], references: [id], onDelete: SetNull)
@@ -328,6 +386,7 @@ model Filing {
   type        ReturnType
   period      String
   status      FilingStatus @default(PENDING)
+  feeAmount   Float?
   filedById   String?
   filedAt     DateTime?
   referenceNo String?
@@ -335,8 +394,12 @@ model Filing {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  client     Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  gstReturn  GstReturn? @relation(fields: [returnId], references: [id], onDelete: SetNull)
+  client    Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  gstReturn GstReturn? @relation(fields: [returnId], references: [id], onDelete: SetNull)
+  payments  Payment[]
+
+  billingItems    BillingInvoiceItem[]
+  paymentRequests PaymentRequest[]
 
   @@index([clientId, status])
   @@index([returnId])
@@ -375,4 +438,131 @@ model AuditLog {
   @@index([firmId, createdAt])
   @@index([entity, entityId])
   @@index([action])
+}
+
+model Payment {
+  id        String         @id @default(cuid())
+  firmId    String
+  clientId  String
+  filingId  String?
+  invoiceId String?
+  amount    Float
+  status    PaymentStatus  @default(PENDING)
+  method    PaymentMethod?
+  paidAt    DateTime?
+  reference String?
+  notes     String?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  firm    Firm            @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  client  Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  filing  Filing?         @relation(fields: [filingId], references: [id], onDelete: Cascade)
+  invoice BillingInvoice? @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  links   PaymentLink[]
+
+  @@index([firmId, status])
+  @@index([filingId])
+  @@index([invoiceId])
+  @@index([clientId])
+}
+
+model PaymentLink {
+  id        String   @id @default(cuid())
+  paymentId String
+  label     String
+  url       String
+  createdAt DateTime @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+}
+
+model BillingInvoice {
+  id        String               @id @default(cuid())
+  firmId    String
+  clientId  String
+  number    String
+  type      BillingInvoiceType   @default(PER_FILING)
+  status    BillingInvoiceStatus @default(DRAFT)
+  issueDate DateTime             @default(now())
+  dueDate   DateTime?
+  subtotal  Float                @default(0)
+  total     Float                @default(0)
+  notes     String?
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  firm     Firm                 @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  client   Client               @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  items    BillingInvoiceItem[]
+  payments Payment[]
+  requests PaymentRequest[]
+
+  @@unique([firmId, number])
+  @@index([firmId, status])
+  @@index([clientId])
+}
+
+model BillingInvoiceItem {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  filingId    String?
+  description String
+  amount      Float
+  createdAt   DateTime @default(now())
+
+  invoice BillingInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  filing  Filing?        @relation(fields: [filingId], references: [id], onDelete: SetNull)
+
+  @@index([invoiceId])
+  @@index([filingId])
+}
+
+model Subscription {
+  id          String       @id @default(cuid())
+  firmId      String
+  clientId    String
+  amount      Float
+  cycle       BillingCycle @default(MONTHLY)
+  startDate   DateTime
+  nextDueDate DateTime
+  active      Boolean      @default(true)
+  notes       String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([firmId, active])
+  @@index([clientId])
+}
+
+model PaymentRequest {
+  id          String                 @id @default(cuid())
+  firmId      String
+  clientId    String
+  invoiceId   String?
+  filingId    String?
+  amount      Float
+  description String?
+  status      PaymentStatus          @default(PENDING)
+  provider    PaymentRequestProvider @default(MANUAL)
+  providerRef String?
+  url         String?
+  expiresAt   DateTime?
+  paidAt      DateTime?
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  firm    Firm            @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  client  Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  invoice BillingInvoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  filing  Filing?         @relation(fields: [filingId], references: [id], onDelete: SetNull)
+
+  @@index([firmId, status])
+  @@index([clientId])
+  @@index([providerRef])
 }

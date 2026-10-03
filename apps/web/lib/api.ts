@@ -31,8 +31,10 @@ export const api = new GstFlowApi({
   onTokensRefreshed: (tokens) => tokenStore.set(tokens.accessToken, tokens.refreshToken),
   onUnauthorized: () => {
     tokenStore.clear();
-    if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-      window.location.href = '/login';
+    if (typeof window !== 'undefined' && !window.location.pathname.endsWith('/login')) {
+      const segment = window.location.pathname.split('/').filter(Boolean)[0];
+      const reserved = new Set(['login', 'api', 'admin', '_next']);
+      window.location.href = segment && !reserved.has(segment) ? `/${segment}/login` : '/login';
     }
   },
 });

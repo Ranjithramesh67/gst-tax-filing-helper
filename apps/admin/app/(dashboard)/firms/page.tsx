@@ -7,7 +7,7 @@ import { FirmStatus } from '@gstflow/types';
 import type { Firm, ListQuery } from '@gstflow/types';
 import { api } from '@/lib/api';
 import { FirmForm } from '@/components/firms/FirmForm';
-import { FirmStatusDialog } from '@/components/firms/FirmStatusDialog';
+import { FirmEditDialog } from '@/components/firms/FirmEditDialog';
 import {
   Badge,
   Button,
@@ -117,6 +117,8 @@ export default function FirmsPage() {
                 <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
                   <th className="px-4 py-3 font-medium">Name</th>
                   <th className="px-4 py-3 font-medium">Slug</th>
+                  <th className="px-4 py-3 font-medium">Branding</th>
+                  <th className="px-4 py-3 font-medium">Fee</th>
                   <th className="px-4 py-3 font-medium">GSTIN</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium">Clients</th>
@@ -133,6 +135,26 @@ export default function FirmsPage() {
                   >
                     <td className="px-4 py-3 font-medium text-slate-800">{firm.name}</td>
                     <td className="px-4 py-3 text-slate-500">{firm.slug}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        {firm.logoUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={firm.logoUrl} alt="" className="h-6 w-6 rounded object-contain" />
+                        ) : null}
+                        <span
+                          className="h-4 w-4 rounded-full border border-slate-300"
+                          style={{ backgroundColor: firm.brandColor ?? '#ffffff' }}
+                        />
+                        {firm.brandColor ? (
+                          <span className="font-mono text-xs text-slate-500">{firm.brandColor}</span>
+                        ) : null}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-slate-500">
+                      {firm.defaultFilingFee === null || firm.defaultFilingFee === undefined
+                        ? '-'
+                        : `₹${firm.defaultFilingFee}`}
+                    </td>
                     <td className="px-4 py-3 text-slate-500">{firm.gstin ?? '-'}</td>
                     <td className="px-4 py-3">
                       <Badge tone={STATUS_TONES[firm.status]}>{firm.status}</Badge>
@@ -142,7 +164,7 @@ export default function FirmsPage() {
                     <td className="px-4 py-3 text-slate-500">{formatDate(firm.createdAt)}</td>
                     <td className="px-4 py-3 text-right">
                       <Button variant="ghost" onClick={() => setEditing(firm)}>
-                        <Pencil className="h-4 w-4" /> Status
+                        <Pencil className="h-4 w-4" /> Edit
                       </Button>
                     </td>
                   </tr>
@@ -176,7 +198,7 @@ export default function FirmsPage() {
         </div>
       </Card>
 
-      {editing ? <FirmStatusDialog firm={editing} onClose={() => setEditing(null)} /> : null}
+      {editing ? <FirmEditDialog firm={editing} onClose={() => setEditing(null)} /> : null}
     </div>
   );
 }

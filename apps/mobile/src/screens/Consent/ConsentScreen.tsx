@@ -45,10 +45,10 @@ export function ConsentScreen(): React.ReactElement {
 
         <Text style={styles.heading}>What we read</Text>
         <Text style={styles.body}>
-          After you accept, GSTFlow reads incoming SMS on this device only to find GST and tax
-          related messages. A message is kept only when it matches GST/tax senders and keywords such
-          as GSTIN, invoice, e-way bill, GST, tax payment, return, or notice. All other messages,
-          including personal, bank, and OTP messages, are ignored and never read, stored, or sent.
+          After you accept, GSTFlow reads incoming SMS on this device only to find GST messages. A
+          message is kept only when it comes from a sender containing GST (such as AD-GSTN,
+          VM-GSTIN) or its text contains GST (including GSTIN, GSTR and GSTN). All other messages,
+          including personal and bank messages, are ignored and never read, stored, or sent.
         </Text>
 
         <Text style={styles.heading}>Why we read them</Text>
@@ -60,15 +60,15 @@ export function ConsentScreen(): React.ReactElement {
 
         <Text style={styles.heading}>What is sent and where</Text>
         <Text style={styles.body}>
-          Only the matched GST/tax messages are sent securely to GSTFlow servers and then to your
+          Only the matched GST messages are sent securely to GSTFlow servers and then to your
           registered CA firm&apos;s account. The raw message content is encrypted, and every read
           and forward action is audited. No GST portal login or filing is performed from this app.
         </Text>
 
         <Text style={styles.heading}>What we do not do</Text>
         <Text style={styles.body}>
-          We do not read OTPs, personal chats, or bank balance messages. We do not send SMS on your
-          behalf. We do not share your messages with anyone other than your registered firm.
+          We do not read personal chats or bank balance messages. We do not send SMS on your behalf.
+          We do not share your messages with anyone other than your registered firm.
         </Text>
 
         <Text style={styles.heading}>How to revoke</Text>

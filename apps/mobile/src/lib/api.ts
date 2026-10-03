@@ -1,5 +1,6 @@
 import { GstFlowApi } from '@gstflow/api-client';
 import { API_BASE_URL } from '@/config';
+import { SmsReader } from '@/native/SmsReader';
 import { clearStoredSession, getStoredSession, updateStoredTokens } from './storage';
 
 type UnauthorizedHandler = () => void;
@@ -22,9 +23,13 @@ export const api = new GstFlowApi({
   },
   onTokensRefreshed: (tokens) => {
     void updateStoredTokens(tokens);
+    // Keep the native uploader's token current so background forwards keep
+    // working after the short-lived access token rolls over.
+    void SmsReader.setSyncCredentials(tokens.accessToken);
   },
   onUnauthorized: () => {
     void clearStoredSession();
+    void SmsReader.setSyncCredentials(null);
     unauthorizedHandler?.();
   },
 });

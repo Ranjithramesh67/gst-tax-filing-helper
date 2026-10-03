@@ -9,8 +9,8 @@ import {
   View,
 } from 'react-native';
 import * as smsQueue from '@/lib/smsQueue';
-import { syncNow } from '@/lib/smsSync';
-import { SmsReader } from '@/native/SmsReader';
+import { syncNow, subscribeSync } from '@/lib/smsSync';
+import { backfillRecentGstSms } from '@/lib/smsCollector';
 import { colors, fontSize, radius, spacing } from '@/theme';
 
 type SyncState = 'queued' | 'sent';
@@ -50,6 +50,12 @@ export function SmsLogScreen(): React.ReactElement {
   const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    // Recover GST SMS delivered while this screen (or the app) was not open.
+    try {
+      await backfillRecentGstSms();
+    } catch {
+      void 0;
+    }
     const items = await smsQueue.list();
     setQueued(items.map((item) => toLogItem(item, 'queued')));
   }, []);
@@ -65,20 +71,26 @@ export function SmsLogScreen(): React.ReactElement {
     };
   }, [load]);
 
+  // React to queue mutations from any actor (live capture, backfill, manual or
+  // background auto-sync) and to completed syncs, so a background sync is
+  // reflected here without the user tapping "Sync now".
   useEffect(() => {
-    const unsubscribe = SmsReader.onSmsReceived((sms) => {
-      void (async () => {
-        await smsQueue.enqueue({
-          sender: sms.sender,
-          body: sms.body,
-          receivedAt: sms.receivedAt,
-          hash: sms.hash,
-        });
-        await load();
-      })();
+    const unsubscribeQueue = smsQueue.subscribe((items) => {
+      setQueued(items.map((item) => toLogItem(item, 'queued')));
     });
-    return unsubscribe;
-  }, [load]);
+    const unsubscribeSync = subscribeSync((event) => {
+      if (event.sent.length === 0) return;
+      const newlySent = event.sent.map((item) => toLogItem(item, 'sent'));
+      setSent((current) => {
+        const sentIds = new Set(newlySent.map((item) => item.id));
+        return [...newlySent, ...current.filter((item) => !sentIds.has(item.id))].slice(0, 100);
+      });
+    });
+    return () => {
+      unsubscribeQueue();
+      unsubscribeSync();
+    };
+  }, []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -93,21 +105,7 @@ export function SmsLogScreen(): React.ReactElement {
     setSyncing(true);
     setNotice(null);
     try {
-      const before = await smsQueue.list();
       const result = await syncNow();
-      const after = await smsQueue.list();
-      const afterIds = new Set(after.map((item) => item.id));
-      const newlySent = before
-        .filter((item) => !afterIds.has(item.id))
-        .map((item) => toLogItem(item, 'sent'));
-
-      if (newlySent.length) {
-        setSent((current) => {
-          const sentIds = new Set(newlySent.map((item) => item.id));
-          return [...newlySent, ...current.filter((item) => !sentIds.has(item.id))].slice(0, 100);
-        });
-      }
-      setQueued(after.map((item) => toLogItem(item, 'queued')));
 
       if (result.ok) {
         setNotice(result.sent > 0 ? `Sent ${result.sent} message(s).` : 'Nothing new to sync.');

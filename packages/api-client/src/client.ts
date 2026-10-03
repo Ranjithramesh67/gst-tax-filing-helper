@@ -2,45 +2,70 @@ import type {
   AppRelease,
   AuthResponse,
   AuthUser,
+  BillingInvoice,
   ClassifySmsBody,
   Client,
   ConsentRecord,
+  CreateBillingInvoiceBody,
   CreateClientBody,
   CreateFilingBody,
   CreateFirmBody,
   CreateGstReturnBody,
+  CreatePaymentBody,
+  CreatePaymentRequestBody,
   CreateReleaseBody,
+  CreateSubscriptionBody,
   CreateUserBody,
   Device,
   DeviceRegisterBody,
   Document,
   Filing,
   Firm,
+  FirmBillingSummary,
+  FirmBranding,
   GstReturn,
   Invoice,
+  ListBillingInvoicesQuery,
   ListClientsQuery,
+  ListPaymentRequestsQuery,
+  ListPaymentsQuery,
   ListQuery,
   ListSmsQuery,
   LoginBody,
+  MarkPaymentRequestPaidBody,
   OtpRequestBody,
   OtpRequestResponse,
   OtpVerifyBody,
   OtpVerifyResponse,
   PaginatedAudit,
+  PaginatedBillingInvoices,
   PaginatedClients,
   PaginatedDocuments,
   PaginatedFilings,
   PaginatedFirms,
   PaginatedInvoices,
+  PaginatedPayments,
   PaginatedReleases,
   PaginatedReturns,
   PaginatedSms,
   PaginatedUsers,
+  Payment,
+  PaymentLink,
+  PaymentLinkBody,
+  PaymentRequest,
+  PublicPaymentRequest,
+  ReceivablesResponse,
   SmsIngestBody,
   SmsIngestResponse,
   SmsMessage,
+  Subscription,
+  UpdateBillingInvoiceBody,
   UpdateClientBody,
+  UpdateFilingBody,
   UpdateFilingStatusBody,
+  UpdateFirmBody,
+  UpdatePaymentBody,
+  UpdateSubscriptionBody,
   UpdateUserBody,
   User,
 } from '@gstflow/types';
@@ -54,6 +79,11 @@ export class GstFlowApi {
   }
 
   health = () => this.http.get<{ status: string; uptime: number }>('/health');
+
+  public = {
+    branding: (slug: string) =>
+      this.http.get<FirmBranding>(`/public/firms/${encodeURIComponent(slug)}`, { skipAuth: true }),
+  };
 
   auth = {
     login: (body: LoginBody) => this.http.post<AuthResponse>('/auth/login', body, { skipAuth: true }),
@@ -113,13 +143,67 @@ export class GstFlowApi {
     create: (body: CreateFilingBody) => this.http.post<Filing>('/filings', body),
     updateStatus: (id: string, body: UpdateFilingStatusBody) =>
       this.http.patch<Filing>(`/filings/${id}/status`, body),
+    update: (id: string, body: UpdateFilingBody) => this.http.patch<Filing>(`/filings/${id}`, body),
+    payments: (id: string) => this.http.get<Payment[]>(`/filings/${id}/payments`),
+    addPayment: (id: string, body: CreatePaymentBody) =>
+      this.http.post<Payment>(`/filings/${id}/payments`, body),
+  };
+
+  payments = {
+    list: (query?: ListPaymentsQuery) => this.http.get<PaginatedPayments>('/payments', query),
+    receivables: () => this.http.get<ReceivablesResponse>('/payments/receivables'),
+    update: (id: string, body: UpdatePaymentBody) =>
+      this.http.patch<Payment>(`/payments/${id}`, body),
+    remove: (id: string) => this.http.del<{ success: boolean }>(`/payments/${id}`),
+    addLink: (id: string, body: PaymentLinkBody) =>
+      this.http.post<PaymentLink>(`/payments/${id}/links`, body),
+    removeLink: (id: string, linkId: string) =>
+      this.http.del<{ success: boolean }>(`/payments/${id}/links/${linkId}`),
+  };
+
+  billing = {
+    invoices: {
+      list: (query?: ListBillingInvoicesQuery) =>
+        this.http.get<PaginatedBillingInvoices>('/billing/invoices', query),
+      get: (id: string) => this.http.get<BillingInvoice>(`/billing/invoices/${id}`),
+      create: (body: CreateBillingInvoiceBody) =>
+        this.http.post<BillingInvoice>('/billing/invoices', body),
+      update: (id: string, body: UpdateBillingInvoiceBody) =>
+        this.http.patch<BillingInvoice>(`/billing/invoices/${id}`, body),
+    },
+    subscriptions: {
+      list: (query?: { clientId?: string }) =>
+        this.http.get<Subscription[]>('/billing/subscriptions', query),
+      create: (body: CreateSubscriptionBody) =>
+        this.http.post<Subscription>('/billing/subscriptions', body),
+      update: (id: string, body: UpdateSubscriptionBody) =>
+        this.http.patch<Subscription>(`/billing/subscriptions/${id}`, body),
+      remove: (id: string) =>
+        this.http.del<{ success: boolean }>(`/billing/subscriptions/${id}`),
+    },
+    paymentRequests: {
+      list: (query?: ListPaymentRequestsQuery) =>
+        this.http.get<PaymentRequest[]>('/billing/payment-requests', query),
+      create: (body: CreatePaymentRequestBody) =>
+        this.http.post<PaymentRequest>('/billing/payment-requests', body),
+      remove: (id: string) =>
+        this.http.del<{ success: boolean }>(`/billing/payment-requests/${id}`),
+      markPaid: (id: string, body?: MarkPaymentRequestPaidBody) =>
+        this.http.post<PaymentRequest>(`/billing/payment-requests/${id}/mark-paid`, body ?? {}),
+    },
+  };
+
+  publicBilling = {
+    paymentRequest: (id: string) =>
+      this.http.get<PublicPaymentRequest>(`/public/payment-requests/${id}`),
   };
 
   admin = {
     firms: {
       list: (query?: ListQuery) => this.http.get<PaginatedFirms>('/admin/firms', query),
+      get: (id: string) => this.http.get<Firm>(`/admin/firms/${id}`),
       create: (body: CreateFirmBody) => this.http.post<Firm>('/admin/firms', body),
-      update: (id: string, body: Partial<CreateFirmBody> & { status?: string }) =>
+      update: (id: string, body: UpdateFirmBody) =>
         this.http.patch<Firm>(`/admin/firms/${id}`, body),
     },
     users: {
@@ -137,6 +221,10 @@ export class GstFlowApi {
     audit: {
       list: (query?: ListQuery & { firmId?: string; action?: string; entity?: string }) =>
         this.http.get<PaginatedAudit>('/admin/audit', query),
+    },
+    billing: {
+      platform: () => this.http.get<FirmBillingSummary[]>('/admin/billing'),
+      firm: (id: string) => this.http.get<ReceivablesResponse>(`/admin/firms/${id}/billing`),
     },
   };
 }

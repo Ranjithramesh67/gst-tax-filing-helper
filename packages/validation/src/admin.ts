@@ -1,6 +1,14 @@
 import { z } from 'zod';
 import { gstinSchema, passwordSchema, phoneSchema, roleSchema } from './common';
 
+const brandColorSchema = z
+  .string()
+  .trim()
+  .regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, 'Use a hex color like #0F766E')
+  .optional();
+const logoUrlSchema = z.string().trim().url().max(2048).optional();
+const feeSchema = z.coerce.number().nonnegative().max(1_000_000).optional();
+
 export const createFirmSchema = z.object({
   name: z.string().trim().min(2).max(200),
   slug: z
@@ -12,13 +20,31 @@ export const createFirmSchema = z.object({
   gstin: gstinSchema.optional(),
   email: z.string().email().optional(),
   phone: phoneSchema.optional(),
+  logoUrl: logoUrlSchema,
+  brandColor: brandColorSchema,
+  supportEmail: z.string().email().optional(),
+  supportPhone: phoneSchema.optional(),
+  address: z.string().max(500).optional(),
+  defaultFilingFee: feeSchema,
 });
 
 export const updateFirmSchema = z.object({
   name: z.string().trim().min(2).max(200).optional(),
+  slug: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9-]{2,60}$/)
+    .optional(),
   gstin: gstinSchema.optional(),
   email: z.string().email().optional(),
   phone: phoneSchema.optional(),
+  logoUrl: logoUrlSchema,
+  brandColor: brandColorSchema,
+  supportEmail: z.string().email().optional(),
+  supportPhone: phoneSchema.optional(),
+  address: z.string().max(500).optional(),
+  defaultFilingFee: feeSchema,
   status: z.enum(['ACTIVE', 'SUSPENDED', 'PENDING']).optional(),
 });
 

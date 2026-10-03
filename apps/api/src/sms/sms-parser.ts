@@ -1,24 +1,8 @@
 import type { SmsCategory } from '@gstflow/types';
 
-const GST_KEYWORDS = [
-  'gst',
-  'g.s.t',
-  'gstin',
-  'gstr',
-  'e-way',
-  'eway',
-  'e-invoice',
-  'tax',
-  'invoice',
-  'hsn',
-  'igst',
-  'cgst',
-  'sgst',
-  'cess',
-  'input credit',
-  'itc',
-];
-
+// Capture rule shared with the Kotlin GstFilter and the JS mirror: a message is
+// GST-related when the sender (header) or the body contains "gst"
+// (case-insensitive), covering GST, GSTIN, GSTR and GSTN.
 const RETURN_PATTERNS = [
   /\bgstr[\s-]*(?:1|3b|9)\b/i,
   /\bgstr\b/i,
@@ -116,9 +100,8 @@ function matchDate(text: string, regex: RegExp): Date | null {
   return parseDate(match[1]!, match[2]!, match[3]!);
 }
 
-export function isGstRelated(body: string): boolean {
-  const text = (body ?? '').toLowerCase();
-  return GST_KEYWORDS.some((keyword) => text.includes(keyword));
+export function isGstRelated(body: string, sender?: string | null): boolean {
+  return (body ?? '').toLowerCase().includes('gst') || (sender ?? '').toLowerCase().includes('gst');
 }
 
 export function classifySms(body: string, sender?: string): SmsCategory {

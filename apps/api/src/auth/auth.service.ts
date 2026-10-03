@@ -125,12 +125,24 @@ export class AuthService {
     return Number(this.config.get<string>('JWT_REFRESH_TTL') ?? 604800);
   }
 
-  async login(email: string, password: string, ip?: string): Promise<{ tokens: TokenPair; actor: Actor }> {
-    const user = await this.prisma.user.findUnique({ where: { email } });
+  async login(
+    email: string,
+    password: string,
+    ip?: string,
+    firmSlug?: string,
+  ): Promise<{ tokens: TokenPair; actor: Actor }> {
+    const user = await this.prisma.user.findUnique({ where: { email }, include: { firm: true } });
     if (!user || !user.isActive) throw new UnauthorizedException('Invalid credentials');
 
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) throw new UnauthorizedException('Invalid credentials');
+
+    if (firmSlug && user.role !== Role.SUPER_ADMIN) {
+      const userSlug = user.firm?.slug?.toLowerCase();
+      if (!userSlug || userSlug !== firmSlug.toLowerCase()) {
+        throw new UnauthorizedException('Invalid firm or credentials');
+      }
+    }
 
     await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
     const actor: Actor = {

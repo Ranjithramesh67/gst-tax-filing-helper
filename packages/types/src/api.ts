@@ -1,17 +1,31 @@
-import { Role } from './enums';
+import { PaymentMethod, PaymentStatus, Role } from './enums';
 import type {
   AppRelease,
   AuditLog,
+  BillingCycle,
+  BillingInvoice,
+  BillingInvoiceItem,
+  BillingInvoiceStatus,
+  BillingInvoiceType,
   Client,
+  ClientReceivable,
   ConsentRecord,
   Device,
   Document,
   Filing,
   Firm,
+  FirmBillingSummary,
+  FirmBranding,
+  FirmReceivable,
   GstReturn,
   Invoice,
   Paginated,
+  Payment,
+  PaymentLink,
+  PaymentRequest,
+  PublicPaymentRequest,
   SmsMessage,
+  Subscription,
   User,
 } from './entities';
 
@@ -62,6 +76,7 @@ export interface OtpVerifyResponse extends AuthTokens {
 export interface LoginBody {
   email: string;
   password: string;
+  firmSlug?: string;
 }
 
 export interface DeviceRegisterBody {
@@ -136,6 +151,16 @@ export interface CreateFirmBody {
   gstin?: string;
   email?: string;
   phone?: string;
+  logoUrl?: string;
+  brandColor?: string;
+  supportEmail?: string;
+  supportPhone?: string;
+  address?: string;
+  defaultFilingFee?: number;
+}
+
+export interface UpdateFirmBody extends Partial<CreateFirmBody> {
+  status?: Firm['status'];
 }
 
 export interface CreateUserBody {
@@ -179,9 +204,131 @@ export interface CreateFilingBody {
   returnId?: string;
   type: Filing['type'];
   period: string;
+  feeAmount?: number;
   referenceNo?: string;
   notes?: string;
 }
+
+export interface UpdateFilingBody {
+  feeAmount?: number;
+  referenceNo?: string;
+  notes?: string;
+}
+
+export interface CreatePaymentBody {
+  amount: number;
+  status?: PaymentStatus;
+  method?: PaymentMethod;
+  paidAt?: string;
+  reference?: string;
+  notes?: string;
+}
+
+export type UpdatePaymentBody = Partial<CreatePaymentBody>;
+
+export interface PaymentLinkBody {
+  label: string;
+  url: string;
+}
+
+export interface ListPaymentsQuery extends ListQuery {
+  clientId?: string;
+  filingId?: string;
+  status?: PaymentStatus;
+  from?: string;
+  to?: string;
+}
+
+export interface ReceivablesResponse {
+  clients: ClientReceivable[];
+  billed: number;
+  collected: number;
+  outstanding: number;
+}
+
+export interface FirmBillingDetail {
+  summary: FirmBillingSummary;
+  clients: ClientReceivable[];
+  firms?: FirmReceivable[];
+}
+
+export type PaginatedPayments = Paginated<Payment>;
+export type { FirmBranding, FirmBillingSummary, ClientReceivable, Payment, PaymentLink };
+
+export interface CreateBillingInvoiceItemBody {
+  filingId?: string;
+  description: string;
+  amount: number;
+}
+
+export interface CreateBillingInvoiceBody {
+  clientId: string;
+  type?: BillingInvoiceType;
+  issueDate?: string;
+  dueDate?: string;
+  notes?: string;
+  items: CreateBillingInvoiceItemBody[];
+}
+
+export interface UpdateBillingInvoiceBody {
+  dueDate?: string | null;
+  notes?: string | null;
+  status?: Extract<BillingInvoiceStatus, 'DRAFT' | 'ISSUED' | 'VOID'>;
+}
+
+export interface ListBillingInvoicesQuery extends ListQuery {
+  clientId?: string;
+  status?: BillingInvoiceStatus;
+  type?: BillingInvoiceType;
+}
+
+export interface CreateSubscriptionBody {
+  clientId: string;
+  amount: number;
+  cycle?: BillingCycle;
+  startDate?: string;
+  nextDueDate?: string;
+  active?: boolean;
+  notes?: string;
+}
+
+export interface UpdateSubscriptionBody {
+  amount?: number;
+  cycle?: BillingCycle;
+  nextDueDate?: string;
+  active?: boolean;
+  notes?: string | null;
+}
+
+export interface CreatePaymentRequestBody {
+  clientId?: string;
+  invoiceId?: string;
+  filingId?: string;
+  amount: number;
+  description?: string;
+  expiresAt?: string;
+}
+
+export interface ListPaymentRequestsQuery {
+  clientId?: string;
+  invoiceId?: string;
+  status?: PaymentStatus;
+}
+
+export interface MarkPaymentRequestPaidBody {
+  method?: PaymentMethod;
+  reference?: string;
+  providerRef?: string;
+}
+
+export type PaginatedBillingInvoices = Paginated<BillingInvoice>;
+export type {
+  BillingInvoice,
+  BillingInvoiceItem,
+  PaymentRequest,
+  PublicPaymentRequest,
+  Subscription,
+};
 
 export interface UpdateFilingStatusBody {
   status: Filing['status'];

@@ -2,9 +2,15 @@
 
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Building2, ScrollText, Smartphone, Users } from 'lucide-react';
+import { Building2, ScrollText, Smartphone, Users, Wallet } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Card, PageHeader } from '@/components/ui';
+
+function formatMoney(value: number): string {
+  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(
+    value,
+  );
+}
 
 export default function AdminDashboardPage() {
   const firms = useQuery({ queryKey: ['admin', 'firms', 'count'], queryFn: () => api.admin.firms.list({ pageSize: 1 }) });
@@ -14,6 +20,16 @@ export default function AdminDashboardPage() {
     queryFn: () => api.admin.releases.list({ pageSize: 1 }),
   });
   const audit = useQuery({ queryKey: ['admin', 'audit', 'count'], queryFn: () => api.admin.audit.list({ pageSize: 1 }) });
+  const billing = useQuery({ queryKey: ['admin', 'billing'], queryFn: () => api.admin.billing.platform() });
+
+  const totals = (billing.data ?? []).reduce(
+    (acc, firm) => ({
+      billed: acc.billed + firm.billed,
+      collected: acc.collected + firm.collected,
+      outstanding: acc.outstanding + firm.outstanding,
+    }),
+    { billed: 0, collected: 0, outstanding: 0 },
+  );
 
   const stats = [
     { label: 'Firms', value: firms.data?.total, href: '/firms', icon: Building2 },
@@ -43,6 +59,35 @@ export default function AdminDashboardPage() {
           );
         })}
       </div>
+      <Link href="/billing">
+        <Card className="mt-4 p-5 transition hover:border-brand-500">
+          <div className="flex items-center gap-2">
+            <Wallet className="h-4 w-4 text-brand-600" />
+            <h2 className="text-sm font-semibold text-slate-800">Platform billing</h2>
+          </div>
+          {billing.isLoading ? (
+            <p className="mt-3 text-sm text-slate-400">Loading...</p>
+          ) : billing.isError ? (
+            <p className="mt-3 text-sm text-red-600">Failed to load billing totals.</p>
+          ) : (
+            <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div>
+                <div className="text-xs uppercase text-slate-400">Billed</div>
+                <div className="mt-1 text-xl font-semibold text-slate-900">{formatMoney(totals.billed)}</div>
+              </div>
+              <div>
+                <div className="text-xs uppercase text-slate-400">Collected</div>
+                <div className="mt-1 text-xl font-semibold text-green-600">{formatMoney(totals.collected)}</div>
+              </div>
+              <div>
+                <div className="text-xs uppercase text-slate-400">Outstanding</div>
+                <div className="mt-1 text-xl font-semibold text-amber-600">{formatMoney(totals.outstanding)}</div>
+              </div>
+            </div>
+          )}
+        </Card>
+      </Link>
+
       <Card className="mt-6 p-5">
         <h2 className="text-sm font-semibold text-slate-800">Distributing the mobile app</h2>
         <p className="mt-2 text-sm text-slate-600">

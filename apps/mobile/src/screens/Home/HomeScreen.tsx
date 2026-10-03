@@ -14,18 +14,19 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { AuthUser } from '@gstflow/types';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { getStoredConsent, type StoredConsent } from '@/lib/storage';
-import { size as queueSize } from '@/lib/smsQueue';
-import { startAutoSync, syncNow } from '@/lib/smsSync';
+import {
+  getReadingEnabled,
+  getStoredConsent,
+  setReadingEnabled,
+  type StoredConsent,
+} from '@/lib/storage';
+import { size as queueSize, subscribe as subscribeQueue } from '@/lib/smsQueue';
+import { isAutoSyncActive, LAST_SYNC_STORAGE_KEY, subscribeSync, syncNow } from '@/lib/smsSync';
 import { SmsReader } from '@/native/SmsReader';
 import type { RootStackParamList } from '@/navigation/RootNavigator';
 import { colors, fontSize, radius, spacing } from '@/theme';
 
 type HomeNavigation = NativeStackNavigationProp<RootStackParamList, 'Home'>;
-
-const LAST_SYNC_KEY = 'gstflow.mobile.lastSyncTime';
-
-let autoSyncStop: (() => void) | null = null;
 
 function messageOf(error: unknown): string {
   if (error instanceof Error) return error.message;
@@ -65,7 +66,7 @@ export function HomeScreen(): React.ReactElement {
   const [meError, setMeError] = useState<string | null>(null);
   const [consent, setConsent] = useState<StoredConsent | null>(null);
   const [hasPermission, setHasPermission] = useState(false);
-  const [listening, setListening] = useState(autoSyncStop != null);
+  const [listening, setListening] = useState(true);
   const [queued, setQueued] = useState(0);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -75,17 +76,18 @@ export function HomeScreen(): React.ReactElement {
   const [notice, setNotice] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const [storedConsent, permission, count, lastSync] = await Promise.all([
+    const [storedConsent, permission, count, lastSync, readingEnabled] = await Promise.all([
       getStoredConsent(),
       SmsReader.hasSmsPermission(),
       queueSize(),
-      AsyncStorage.getItem(LAST_SYNC_KEY),
+      AsyncStorage.getItem(LAST_SYNC_STORAGE_KEY),
+      getReadingEnabled(),
     ]);
     setConsent(storedConsent);
     setHasPermission(permission);
     setQueued(count);
     setLastSyncAt(lastSync);
-    setListening(autoSyncStop != null);
+    setListening(readingEnabled);
   }, []);
 
   useEffect(() => {
@@ -119,6 +121,22 @@ export function HomeScreen(): React.ReactElement {
     }, [refresh]),
   );
 
+  // Reflect background activity: the app-lifetime auto-sync loop drains the
+  // queue and stamps a last-sync time without any user interaction, so subscribe
+  // to those events rather than only refreshing on focus/tap.
+  useEffect(() => {
+    const unsubscribeQueue = subscribeQueue((items) => {
+      setQueued(items.length);
+    });
+    const unsubscribeSync = subscribeSync((event) => {
+      setLastSyncAt(event.at);
+    });
+    return () => {
+      unsubscribeQueue();
+      unsubscribeSync();
+    };
+  }, []);
+
   const onGrantPermission = useCallback(async () => {
     setGranting(true);
     setNotice(null);
@@ -148,21 +166,15 @@ export function HomeScreen(): React.ReactElement {
             setNotice('SMS permission is required before reading can start.');
             return;
           }
-          const started = await SmsReader.startListening();
-          if (!started) {
-            setNotice('Unable to start background reading on this device.');
-            return;
-          }
+          await setReadingEnabled(true);
           await SmsReader.setConsent(true);
-          if (!autoSyncStop) autoSyncStop = startAutoSync();
+          await SmsReader.startListening();
           setListening(true);
           setNotice('Background reading is on.');
+          void syncNow();
         } else {
-          await SmsReader.stopListening();
-          if (autoSyncStop) {
-            autoSyncStop();
-            autoSyncStop = null;
-          }
+          await setReadingEnabled(false);
+          await SmsReader.setConsent(false);
           setListening(false);
           setNotice('Background reading is off.');
         }
@@ -170,6 +182,7 @@ export function HomeScreen(): React.ReactElement {
         setNotice(messageOf(error));
       } finally {
         setToggling(false);
+        setQueued(await queueSize());
       }
     },
     [hasPermission],
@@ -181,9 +194,6 @@ export function HomeScreen(): React.ReactElement {
     try {
       const result = await syncNow();
       if (result.ok) {
-        const now = new Date().toISOString();
-        await AsyncStorage.setItem(LAST_SYNC_KEY, now);
-        setLastSyncAt(now);
         setNotice(result.sent > 0 ? `Synced ${result.sent} message(s).` : 'Everything is up to date.');
       } else if (result.skipped === 'no-consent') {
         setNotice('Consent is required before messages can be synced.');
@@ -297,6 +307,14 @@ export function HomeScreen(): React.ReactElement {
       </Card>
 
       <Card title="Sync">
+        <InfoRow
+          label="Auto-sync"
+          value={
+            <Text style={[styles.infoValue, isAutoSyncActive() ? styles.valueSuccess : styles.valueDanger]}>
+              {isAutoSyncActive() ? 'On' : 'Off'}
+            </Text>
+          }
+        />
         <InfoRow label="Last sync" value={<Text style={styles.infoValue}>{formatDateTime(lastSyncAt)}</Text>} />
         <InfoRow label="Queued" value={<Text style={styles.infoValue}>{queued}</Text>} />
         <Pressable

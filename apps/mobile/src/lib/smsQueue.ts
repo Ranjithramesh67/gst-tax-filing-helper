@@ -76,10 +76,46 @@ function withLock<T>(fn: () => Promise<T>): Promise<T> {
   return result;
 }
 
+/**
+ * Change notification.
+ *
+ * The queue is mutated by several independent actors (the live SMS listener,
+ * the inbox backfill, the manual Sync button, and the app-lifetime auto-sync
+ * loop). Screens must re-read the queue whenever any of them removes or adds an
+ * entry; otherwise a background auto-sync leaves the UI showing stale "Queued"
+ * rows until the next manual refresh.
+ */
+export type QueueListener = (items: QueuedSms[]) => void;
+
+const listeners = new Set<QueueListener>();
+
+function publish(): void {
+  if (listeners.size === 0) return;
+  void list()
+    .then((items) => {
+      for (const listener of listeners) {
+        try {
+          listener(items);
+        } catch {
+          // A misbehaving subscriber must not break queue mutations.
+        }
+      }
+    })
+    .catch(() => undefined);
+}
+
+/** Subscribe to queue changes. Returns an unsubscribe function. */
+export function subscribe(listener: QueueListener): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
 export async function enqueue(
   item: SmsIngestItem,
 ): Promise<{ added: boolean; id: string; size: number }> {
-  return withLock(async () => {
+  const result = await withLock(async () => {
     const key = await getQueueKey();
     const entries = await readEntries();
     const existing = entries.find((entry) => entry.hash === item.hash);
@@ -99,6 +135,8 @@ export async function enqueue(
     await writeEntries(entries);
     return { added: true, id: entry.id, size: entries.length };
   });
+  if (result.added) publish();
+  return result;
 }
 
 export async function list(): Promise<QueuedSms[]> {
@@ -118,14 +156,16 @@ export async function list(): Promise<QueuedSms[]> {
 
 export async function remove(ids: string[]): Promise<number> {
   if (!ids.length) return 0;
-  return withLock(async () => {
+  const removed = await withLock(async () => {
     const wanted = new Set(ids);
     const entries = await readEntries();
     const kept = entries.filter((entry) => !wanted.has(entry.id));
-    const removed = entries.length - kept.length;
-    if (removed > 0) await writeEntries(kept);
-    return removed;
+    const count = entries.length - kept.length;
+    if (count > 0) await writeEntries(kept);
+    return count;
   });
+  if (removed > 0) publish();
+  return removed;
 }
 
 export async function size(): Promise<number> {
@@ -134,7 +174,8 @@ export async function size(): Promise<number> {
 }
 
 export async function clear(): Promise<void> {
-  return withLock(async () => {
+  await withLock(async () => {
     await writeEntries([]);
   });
+  publish();
 }

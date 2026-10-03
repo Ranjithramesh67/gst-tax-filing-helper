@@ -87,3 +87,21 @@ export const OtpPurpose = {
   LOGIN: 'LOGIN',
 } as const;
 export type OtpPurpose = (typeof OtpPurpose)[keyof typeof OtpPurpose];
+
+export const PaymentStatus = {
+  PENDING: 'PENDING',
+  COMPLETED: 'COMPLETED',
+  FAILED: 'FAILED',
+  REFUNDED: 'REFUNDED',
+} as const;
+export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus];
+
+export const PaymentMethod = {
+  CASH: 'CASH',
+  UPI: 'UPI',
+  BANK_TRANSFER: 'BANK_TRANSFER',
+  CHEQUE: 'CHEQUE',
+  CARD: 'CARD',
+  OTHER: 'OTHER',
+} as const;
+export type PaymentMethod = (typeof PaymentMethod)[keyof typeof PaymentMethod];

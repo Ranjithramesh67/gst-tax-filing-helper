@@ -31,29 +31,14 @@ data class IncomingSms(
 
 /**
  * Kotlin mirror of apps/api/src/sms/sms-parser.ts and the JS
- * apps/mobile/src/lib/gstFilter.ts. Keep the keyword/pattern order identical so
- * the on-device pre-filter and the server-side classifier agree.
+ * apps/mobile/src/lib/gstFilter.ts. The capture rule and the classification
+ * pattern order must stay identical so the on-device pre-filter and the
+ * server-side classifier agree.
+ *
+ * Capture rule: a message is GST-related when the sender (header) or the body
+ * contains "gst" (case-insensitive), covering GST, GSTIN, GSTR and GSTN.
  */
 object GstFilter {
-    private val GST_KEYWORDS = listOf(
-        "gst",
-        "g.s.t",
-        "gstin",
-        "gstr",
-        "e-way",
-        "eway",
-        "e-invoice",
-        "tax",
-        "invoice",
-        "hsn",
-        "igst",
-        "cgst",
-        "sgst",
-        "cess",
-        "input credit",
-        "itc",
-    )
-
     private val RETURN_PATTERNS = listOf(
         Regex("""\bgstr[\s-]*(?:1|3b|9)\b""", RegexOption.IGNORE_CASE),
         Regex("""\bgstr\b""", RegexOption.IGNORE_CASE),
@@ -92,10 +77,9 @@ object GstFilter {
         timeZone = TimeZone.getTimeZone("UTC")
     }
 
-    fun isGstRelated(body: String?): Boolean {
-        val text = (body ?: "").lowercase(Locale.ROOT)
-        return GST_KEYWORDS.any { text.contains(it) }
-    }
+    fun isGstRelated(body: String?, sender: String? = null): Boolean =
+        (body ?: "").lowercase(Locale.ROOT).contains("gst") ||
+            (sender ?: "").lowercase(Locale.ROOT).contains("gst")
 
     fun classify(body: String?, sender: String? = null): String {
         val text = "${body ?: ""} ${sender ?: ""}"
@@ -125,9 +109,10 @@ object GstFilter {
 
 /**
  * Reads the in-app consent flag. The JS layer owns the source of truth in
- * AsyncStorage key `gstflow.mobile.consent`; on Android AsyncStorage persists to
- * the `RKStorage` SQLite database, so the native receiver can read the same flag
- * without any JS running. SharedPreferences is used as a secondary cache that JS
+ * AsyncStorage key `gstflow.mobile.consent`, read here directly so the receiver
+ * can honour it without any JS running. AsyncStorage 2.x persists to
+ * `AsyncStorage`/`Storage`; older builds use `RKStorage`/`catalystLocalStorage`,
+ * so both stores are checked. SharedPreferences is a secondary cache that JS
  * mirrors through SmsReaderModule.setConsent().
  */
 object SmsConsent {
@@ -149,29 +134,27 @@ object SmsConsent {
     }
 
     private fun readFromAsyncStorage(context: Context): Boolean? {
-        return try {
-            val dbFile = context.getDatabasePath(ASYNC_STORAGE_DB)
-            // No AsyncStorage database yet: fall back to the SharedPreferences cache.
-            if (!dbFile.exists()) return null
-            SQLiteDatabase.openDatabase(dbFile.path, null, SQLiteDatabase.OPEN_READONLY).use { db ->
-                db.query(
-                    ASYNC_STORAGE_TABLE,
-                    arrayOf("value"),
-                    "key = ?",
-                    arrayOf(CONSENT_KEY),
-                    null,
-                    null,
-                    null,
-                ).use { cursor ->
-                    // Key missing from an existing store means consent was never
-                    // granted or was revoked (clearStoredConsent removes the row).
-                    if (cursor.moveToFirst()) parseConsent(cursor.getString(0)) else false
+        val stores = listOf(
+            CURRENT_ASYNC_STORAGE_DB to CURRENT_ASYNC_STORAGE_TABLE,
+            LEGACY_ASYNC_STORAGE_DB to LEGACY_ASYNC_STORAGE_TABLE,
+        )
+        for ((dbName, table) in stores) {
+            val dbFile = context.getDatabasePath(dbName)
+            // No such AsyncStorage store on this install: try the next one.
+            if (!dbFile.exists()) continue
+            try {
+                SQLiteDatabase.openDatabase(dbFile.path, null, SQLiteDatabase.OPEN_READONLY).use { db ->
+                    db.query(table, arrayOf("value"), "key = ?", arrayOf(CONSENT_KEY), null, null, null).use { cursor ->
+                        // A matching row is authoritative; a missing key in one
+                        // store must not mask a value in the other or the cache.
+                        if (cursor.moveToFirst()) return parseConsent(cursor.getString(0))
+                    }
                 }
+            } catch (error: Exception) {
+                Log.w(TAG, "Unable to read consent from $dbName: ${error.message}")
             }
-        } catch (error: Exception) {
-            Log.w(TAG, "Unable to read consent from AsyncStorage: ${error.message}")
-            null
         }
+        return null
     }
 
     private fun parseConsent(raw: String?): Boolean {
@@ -191,8 +174,10 @@ object SmsConsent {
             normalized == "accepted"
     }
 
-    private const val ASYNC_STORAGE_DB = "RKStorage"
-    private const val ASYNC_STORAGE_TABLE = "catalystLocalStorage"
+    private const val CURRENT_ASYNC_STORAGE_DB = "AsyncStorage"
+    private const val CURRENT_ASYNC_STORAGE_TABLE = "Storage"
+    private const val LEGACY_ASYNC_STORAGE_DB = "RKStorage"
+    private const val LEGACY_ASYNC_STORAGE_TABLE = "catalystLocalStorage"
     private const val TAG = "SmsConsent"
 }
 
@@ -249,7 +234,7 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
 
         for (part in grouped.values) {
             val body = part.body.toString()
-            if (!GstFilter.isGstRelated(body)) {
+            if (!GstFilter.isGstRelated(body, part.sender)) {
                 Log.d(TAG, "Skipping non-GST SMS from ${part.sender}")
                 continue
             }

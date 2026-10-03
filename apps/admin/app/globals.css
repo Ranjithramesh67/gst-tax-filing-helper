@@ -3,10 +3,75 @@
 @tailwind utilities;
 
 :root {
-  --background: #f8fafc;
+  color-scheme: dark;
+  --background: #05060a;
+  --card: #0b0e14;
+  --border: #1f2937;
+  --muted: #94a3b8;
+  --primary: #007fff;
+  --accent: #800080;
 }
 
+html,
 body {
   background: var(--background);
-  color: #0f172a;
+  color: #e5e7eb;
+  font-family: var(--font-body), Roboto, ui-sans-serif, system-ui, sans-serif;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-headline), Montserrat, sans-serif;
+}
+
+.keera-text-gradient {
+  background: linear-gradient(90deg, #800080 0%, #007fff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Dark remap for legacy light utility classes used across admin pages. */
+.bg-white {
+  background-color: var(--card) !important;
+}
+.bg-slate-50,
+.bg-slate-100 {
+  background-color: #0f1420 !important;
+}
+.hover\:bg-slate-50:hover,
+.hover\:bg-slate-100:hover {
+  background-color: #1f2937 !important;
+}
+.text-slate-900,
+.text-slate-800 {
+  color: #f3f4f6 !important;
+}
+.text-slate-700,
+.text-slate-600 {
+  color: #cbd5e1 !important;
+}
+.text-slate-500 {
+  color: #9aa6b8 !important;
+}
+.text-slate-400 {
+  color: #7c8698 !important;
+}
+.border-slate-100,
+.border-slate-200,
+.border-slate-300 {
+  border-color: var(--border) !important;
+}
+.divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--border) !important;
+}
+.keera-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.keera-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(#800080, #007fff);
+  border-radius: 4px;
 }

@@ -1,10 +1,14 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { Client, OtpVerifyResponse } from '@gstflow/types';
 import { api, setUnauthorizedHandler } from './api';
-import { setSessionChecker } from './smsSync';
+import { setSessionChecker, syncNow } from './smsSync';
+import { getOrCreateAndroidId } from './device';
+import { SmsReader } from '@/native/SmsReader';
 import {
+  clearReadingEnabled,
   clearStoredConsent,
   clearStoredSession,
+  getReadingEnabled,
   getStoredSession,
   setStoredConsent,
   setStoredSession,
@@ -49,6 +53,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
     return () => setSessionChecker(null);
   }, []);
 
+  // Mirror the session credentials into native storage so the Android SMS
+  // uploader can forward captured messages while the app/JS is not running.
+  useEffect(() => {
+    if (loading) return;
+    void (async () => {
+      try {
+        if (session) {
+          const deviceId = await getOrCreateAndroidId();
+          await SmsReader.setSyncCredentials(session.accessToken, deviceId);
+        } else {
+          await SmsReader.setSyncCredentials(null);
+        }
+      } catch {
+        void 0;
+      }
+    })();
+  }, [session, loading]);
+
   const signIn = useCallback(async (result: OtpVerifyResponse) => {
     const next: StoredSession = {
       accessToken: result.accessToken,
@@ -63,8 +85,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
         accepted: true,
         otpVerified: result.consent.otpVerified,
       });
+      // Mirror consent to the native layer so the SMS receiver honours it even
+      // before the user toggles background reading.
+      try {
+        const readingEnabled = await getReadingEnabled();
+        await SmsReader.setConsent(readingEnabled);
+        if (readingEnabled) {
+          await SmsReader.startListening();
+        }
+      } catch {
+        void 0;
+      }
     }
     setSession(next);
+    // Drain anything captured while signed out (or before auto-sync started).
+    void syncNow();
   }, []);
 
   const signOut = useCallback(async () => {
@@ -78,6 +113,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
     }
     await clearStoredSession();
     await clearStoredConsent();
+    await clearReadingEnabled();
+    try {
+      await SmsReader.setConsent(false);
+      await SmsReader.stopListening();
+    } catch {
+      void 0;
+    }
     setSession(null);
   }, []);
 

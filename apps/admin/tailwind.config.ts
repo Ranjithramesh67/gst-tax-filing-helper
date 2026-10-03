@@ -6,13 +6,34 @@ const config: Config = {
     extend: {
       colors: {
         brand: {
-          50: '#eff6ff',
-          100: '#dbeafe',
-          500: '#3b82f6',
-          600: '#2563eb',
-          700: '#1d4ed8',
-          900: '#1e3a8a',
+          50: '#e6f2ff',
+          100: '#cce6ff',
+          200: '#99ccff',
+          300: '#66b3ff',
+          400: '#3399ff',
+          500: '#007fff',
+          600: '#0072e6',
+          700: '#0066cc',
+          800: '#004d99',
+          900: '#003a75',
         },
+        vibrant: {
+          purple: '#800080',
+          blue: '#007fff',
+        },
+        ink: {
+          900: '#05060a',
+          800: '#0b0e14',
+          700: '#111827',
+          600: '#1f2937',
+        },
+      },
+      fontFamily: {
+        headline: ['var(--font-headline)', 'Montserrat', 'sans-serif'],
+        body: ['var(--font-body)', 'Roboto', 'sans-serif'],
+      },
+      backgroundImage: {
+        'keera-gradient': 'linear-gradient(90deg, #800080 0%, #007fff 100%)',
       },
     },
   },

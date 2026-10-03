@@ -40,8 +40,22 @@ describe('classifySms', () => {
 });
 
 describe('isGstRelated', () => {
-  it('detects GST keywords case-insensitively', () => {
+  it('matches when the body contains GST (case-insensitive)', () => {
     expect(isGstRelated('gst due')).toBe(true);
+    expect(isGstRelated('Gst')).toBe(true);
+    expect(isGstRelated('Your GSTR-3B is due')).toBe(true);
+    expect(isGstRelated('GSTIN 29ABCDE1234F1Z5')).toBe(true);
+  });
+
+  it('matches when only the sender header contains GST', () => {
+    expect(isGstRelated('Your return is due', 'AD-GSTN')).toBe(true);
+    expect(isGstRelated('Filing acknowledgement', 'VM-GSTIN')).toBe(true);
+  });
+
+  it('ignores broad tax/invoice keywords without GST', () => {
+    expect(isGstRelated('Tax invoice INV-2026-001 raised')).toBe(false);
+    expect(isGstRelated('Your bill of Rs 500 is due')).toBe(false);
+    expect(isGstRelated('Payment of Rs 500 received')).toBe(false);
     expect(isGstRelated('Download your monthly statement')).toBe(false);
   });
 });

@@ -22,6 +22,7 @@ import type {
   FilingsQuery,
   InvoicesQuery,
   ReturnsQuery,
+  UpdateFilingInput,
   UpdateFilingStatusInput,
 } from './dto';
 
@@ -134,6 +135,7 @@ export class FilingsService {
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.filing.findMany({
         where,
+        include: { payments: { select: { amount: true, status: true } } },
         orderBy: { createdAt: 'desc' },
         skip: slice.skip,
         take: slice.take,
@@ -162,10 +164,12 @@ export class FilingsService {
         type: body.type,
         period: body.period,
         status,
+        feeAmount: body.feeAmount ?? null,
         referenceNo: body.referenceNo ?? null,
         notes: body.notes ?? null,
         ...(filed ? { filedAt: new Date(), filedById: actor.userId } : {}),
       },
+      include: { payments: { select: { amount: true, status: true } } },
     });
     await this.audit.recordAs(actor, {
       action: 'filing.create',
@@ -174,6 +178,30 @@ export class FilingsService {
       meta: { clientId: filing.clientId, returnId: filing.returnId, status: filing.status },
     });
     return serialiseFiling(filing);
+  }
+
+  async updateFiling(actor: Actor, id: string, body: UpdateFilingInput): Promise<Filing> {
+    const filing = await this.prisma.filing.findFirst({
+      where: { id, ...(actor.firmId ? { client: { is: { firmId: actor.firmId } } } : {}) },
+    });
+    if (!filing) throw new NotFoundException('Filing not found');
+
+    const updated = await this.prisma.filing.update({
+      where: { id: filing.id },
+      data: {
+        ...(body.feeAmount !== undefined ? { feeAmount: body.feeAmount } : {}),
+        ...(body.referenceNo !== undefined ? { referenceNo: body.referenceNo } : {}),
+        ...(body.notes !== undefined ? { notes: body.notes } : {}),
+      },
+      include: { payments: { select: { amount: true, status: true } } },
+    });
+    await this.audit.recordAs(actor, {
+      action: 'filing.update',
+      entity: 'Filing',
+      entityId: updated.id,
+      meta: { ...body },
+    });
+    return serialiseFiling(updated);
   }
 
   async updateFilingStatus(
@@ -198,6 +226,7 @@ export class FilingsService {
         ...(body.notes !== undefined ? { notes: body.notes } : {}),
         ...(filed ? { filedAt: new Date(), filedById: actor.userId } : {}),
       },
+      include: { payments: { select: { amount: true, status: true } } },
     });
 
     if (filed && filing.returnId) {

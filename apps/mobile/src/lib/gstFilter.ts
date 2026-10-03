@@ -3,28 +3,13 @@ import * as CryptoJS from 'crypto-js';
 
 /**
  * Pure GST filter. This is the JS mirror of apps/api/src/sms/sms-parser.ts and
- * of the Kotlin GstFilter used by the Android receiver. Keyword and pattern
- * order must stay identical across all three.
+ * of the Kotlin GstFilter used by the Android receiver. The capture rule and
+ * the classification pattern order must stay identical across all three.
+ *
+ * Capture rule: a message is GST-related when the sender (header) or the body
+ * contains the substring "gst" (case-insensitive). This covers GST, GSTIN,
+ * GSTR and GSTN, and deliberately excludes the broader tax/invoice keywords.
  */
-
-const GST_KEYWORDS = [
-  'gst',
-  'g.s.t',
-  'gstin',
-  'gstr',
-  'e-way',
-  'eway',
-  'e-invoice',
-  'tax',
-  'invoice',
-  'hsn',
-  'igst',
-  'cgst',
-  'sgst',
-  'cess',
-  'input credit',
-  'itc',
-] as const;
 
 const RETURN_PATTERNS = [
   /\bgstr[\s-]*(?:1|3b|9)\b/i,
@@ -51,9 +36,8 @@ function matches(patterns: RegExp[], text: string): boolean {
   return patterns.some((pattern) => pattern.test(text));
 }
 
-export function isGstRelated(body: string | null | undefined): boolean {
-  const text = (body ?? '').toLowerCase();
-  return GST_KEYWORDS.some((keyword) => text.includes(keyword));
+export function isGstRelated(body: string | null | undefined, sender?: string | null): boolean {
+  return (body ?? '').toLowerCase().includes('gst') || (sender ?? '').toLowerCase().includes('gst');
 }
 
 export function classifySms(body: string | null | undefined, sender?: string): SmsCategory {
