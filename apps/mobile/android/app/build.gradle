@@ -52,6 +52,17 @@ android {
         buildConfig true
     }
 
+    // Produce small per-ABI APKs (plus a universal fallback) so downloads are
+    // less error-prone and installs are not rejected for carrying unused ABIs.
+    splits {
+        abi {
+            reset()
+            enable true
+            universalApk true
+            include "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
+        }
+    }
+
     signingConfigs {
         debug {
             // Sign with every scheme for the widest device compatibility.
