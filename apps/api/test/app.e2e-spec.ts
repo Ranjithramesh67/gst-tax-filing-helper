@@ -65,6 +65,46 @@ describe('GSTFlow API (e2e)', () => {
       expect(res.body.role).toBe('FILER');
       expect(res.body.email).toBe(SEEDED.filer.email);
     });
+
+    it('POST /v1/auth/refresh accepts the same refresh token twice (non-rotating)', async () => {
+      const loginRes = await login(SEEDED.filer.email, SEEDED.filer.password);
+      const refreshToken = loginRes.body.refreshToken as string;
+      expect(typeof refreshToken).toBe('string');
+
+      const first = await request(app.getHttpServer())
+        .post('/v1/auth/refresh')
+        .send({ refreshToken })
+        .expect(201);
+      expect(typeof first.body.accessToken).toBe('string');
+      expect(first.body.refreshToken).toBe(refreshToken);
+
+      const second = await request(app.getHttpServer())
+        .post('/v1/auth/refresh')
+        .send({ refreshToken })
+        .expect(201);
+      expect(second.body.refreshToken).toBe(refreshToken);
+
+      await request(app.getHttpServer())
+        .get('/v1/auth/me')
+        .set('Authorization', `Bearer ${second.body.accessToken}`)
+        .expect(200);
+    });
+
+    it('POST /v1/auth/refresh rejects a token revoked by logout', async () => {
+      const loginRes = await login(SEEDED.filer.email, SEEDED.filer.password);
+      const refreshToken = loginRes.body.refreshToken as string;
+
+      await request(app.getHttpServer())
+        .post('/v1/auth/logout')
+        .set('Authorization', `Bearer ${loginRes.body.accessToken}`)
+        .send({ refreshToken })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post('/v1/auth/refresh')
+        .send({ refreshToken })
+        .expect(401);
+    });
   });
 
   describe('clients RBAC', () => {

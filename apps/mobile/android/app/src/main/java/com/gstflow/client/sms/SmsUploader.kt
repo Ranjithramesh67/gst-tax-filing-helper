@@ -27,6 +27,7 @@ object SmsUploader {
     // SmsReaderModule.setSyncCredentials so no AsyncStorage read is required.
     private const val PREFS = "gstflow_client_prefs"
     private const val PREF_ACCESS_TOKEN = "access_token"
+    private const val PREF_REFRESH_TOKEN = "refresh_token"
     private const val PREF_DEVICE_ID = "device_id"
 
     private const val AUTH_KEY = "gstflow.mobile.auth"
@@ -41,12 +42,41 @@ object SmsUploader {
         val base = BuildConfig.API_BASE_URL.trim().trimEnd('/')
         if (base.isEmpty()) return false
 
-        val token = readAccessToken(context)
+        var token = readAccessToken(context)
         if (token.isNullOrBlank()) {
             Log.i(TAG, "No access token mirrored; JS sync will forward later")
             return false
         }
 
+        var status = postIngest(base, token, context, sms, connectTimeoutMs, readTimeoutMs)
+        // The access token is short-lived (15 min). When the app has been closed
+        // for longer than that, rotate it with the mirrored refresh token and
+        // retry, so background forwarding keeps working without JS.
+        if (status == HttpURLConnection.HTTP_UNAUTHORIZED && refreshAccessToken(context, base, connectTimeoutMs, readTimeoutMs)) {
+            token = readAccessToken(context)
+            if (!token.isNullOrBlank()) {
+                status = postIngest(base, token, context, sms, connectTimeoutMs, readTimeoutMs)
+            }
+        }
+
+        return if (status in 200..299) {
+            Log.i(TAG, "Forwarded SMS to backend (HTTP $status)")
+            true
+        } else {
+            Log.w(TAG, "Backend rejected SMS upload: HTTP $status")
+            false
+        }
+    }
+
+    /** Sends one ingest request and returns the HTTP status, or -1 on failure. */
+    private fun postIngest(
+        base: String,
+        token: String,
+        context: Context,
+        sms: IncomingSms,
+        connectTimeoutMs: Int,
+        readTimeoutMs: Int,
+    ): Int {
         val deviceId = readDeviceId(context)
         val item = JSONObject().apply {
             put("sender", sms.sender)
@@ -56,35 +86,82 @@ object SmsUploader {
             if (!deviceId.isNullOrBlank()) put("deviceId", deviceId)
         }
         val payload = JSONObject().put("items", JSONArray().put(item)).toString()
-        val url = URL("$base/sms/ingest")
 
-        val connection = (url.openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
-            connectTimeout = connectTimeoutMs
-            readTimeout = readTimeoutMs
-            doOutput = true
-            setRequestProperty("Content-Type", "application/json")
-            setRequestProperty("Accept", "application/json")
-            setRequestProperty("Authorization", "Bearer $token")
-        }
-
+        var connection: HttpURLConnection? = null
         return try {
+            connection = (URL("$base/sms/ingest").openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                this.connectTimeout = connectTimeoutMs
+                this.readTimeout = readTimeoutMs
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("Authorization", "Bearer $token")
+            }
             connection.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
             val status = connection.responseCode
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream
             stream?.use { it.readBytes() }
-            if (status in 200..299) {
-                Log.i(TAG, "Forwarded SMS to backend (HTTP $status)")
-                true
-            } else {
-                Log.w(TAG, "Backend rejected SMS upload: HTTP $status")
-                false
-            }
+            status
         } catch (error: Exception) {
             Log.w(TAG, "SMS upload failed: ${error.message}")
+            -1
+        } finally {
+            connection?.disconnect()
+        }
+    }
+
+    /**
+     * Exchanges the mirrored refresh token for a fresh access/refresh pair and
+     * persists them for subsequent uploads. Returns true when the access token
+     * was refreshed. All failures are non-fatal: the outbox retry job will try
+     * again later.
+     */
+    private fun refreshAccessToken(
+        context: Context,
+        base: String,
+        connectTimeoutMs: Int,
+        readTimeoutMs: Int,
+    ): Boolean {
+        val refreshToken = readRefreshToken(context)
+        if (refreshToken.isNullOrBlank()) {
+            Log.i(TAG, "No refresh token mirrored; cannot rotate access token")
+            return false
+        }
+
+        var connection: HttpURLConnection? = null
+        return try {
+            val body = JSONObject().put("refreshToken", refreshToken).toString()
+            connection = (URL("$base/auth/refresh").openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                this.connectTimeout = connectTimeoutMs
+                this.readTimeout = readTimeoutMs
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("Accept", "application/json")
+            }
+            connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            val status = connection.responseCode
+            if (status !in 200..299) {
+                Log.w(TAG, "Token refresh rejected: HTTP $status")
+                return false
+            }
+            val text = connection.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
+            val json = JSONObject(text)
+            val access = json.optString("accessToken")
+            val rotated = json.optString("refreshToken")
+            if (access.isBlank()) return false
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().apply {
+                putString(PREF_ACCESS_TOKEN, access)
+                if (rotated.isNotBlank()) putString(PREF_REFRESH_TOKEN, rotated)
+            }.apply()
+            Log.i(TAG, "Rotated access token natively")
+            true
+        } catch (error: Exception) {
+            Log.w(TAG, "Token refresh failed: ${error.message}")
             false
         } finally {
-            connection.disconnect()
+            connection?.disconnect()
         }
     }
 
@@ -98,6 +175,21 @@ object SmsUploader {
         val raw = readStorageValue(context, AUTH_KEY) ?: return null
         return try {
             JSONObject(raw).optString("accessToken").ifBlank { null }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun readRefreshToken(context: Context): String? {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val mirrored = prefs.getString(PREF_REFRESH_TOKEN, null)
+        if (!mirrored.isNullOrBlank()) return mirrored
+
+        // Fall back to a direct AsyncStorage read for installs whose token was
+        // persisted by the JS layer before mirroring was wired up.
+        val raw = readStorageValue(context, AUTH_KEY) ?: return null
+        return try {
+            JSONObject(raw).optString("refreshToken").ifBlank { null }
         } catch (_: Exception) {
             null
         }

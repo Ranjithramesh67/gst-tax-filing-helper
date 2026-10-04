@@ -36,7 +36,11 @@ interface SmsReaderNativeModule {
   getRecentGstSms(limit: number): Promise<NativeSmsPayload[]>;
   flushPending(): Promise<number>;
   clearNotification(): Promise<boolean>;
-  setSyncCredentials(accessToken: string | null, deviceId: string | null): Promise<boolean>;
+  setSyncCredentials(
+    accessToken: string | null,
+    refreshToken: string | null,
+    deviceId: string | null,
+  ): Promise<boolean>;
   isIgnoringBatteryOptimizations(): Promise<boolean>;
   getDeviceManufacturer(): Promise<string>;
   requestIgnoreBatteryOptimizations(): Promise<boolean>;
@@ -120,12 +124,19 @@ export const SmsReader = {
   },
 
   /**
-   * Mirrors the signed-in access token (and device id) to native storage so the
-   * Android uploader can forward captured SMS while JS is not running. Pass null
-   * to clear on sign-out.
+   * Mirrors the signed-in access + refresh token (and device id) to native
+   * storage so the Android uploader can forward captured SMS while JS is not
+   * running and rotate its own access token. Pass a null access token to clear
+   * both tokens on sign-out.
    */
-  setSyncCredentials(accessToken: string | null, deviceId: string | null = null): Promise<boolean> {
-    return nativeModule ? nativeModule.setSyncCredentials(accessToken, deviceId) : Promise.resolve(false);
+  setSyncCredentials(
+    accessToken: string | null,
+    refreshToken: string | null = null,
+    deviceId: string | null = null,
+  ): Promise<boolean> {
+    return nativeModule
+      ? nativeModule.setSyncCredentials(accessToken, refreshToken, deviceId)
+      : Promise.resolve(false);
   },
 
   /**

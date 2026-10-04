@@ -275,20 +275,30 @@ class SmsReaderModule(private val reactContext: ReactApplicationContext) :
     }
 
     /**
-     * Mirrors the signed-in access token (and device id) into SharedPreferences so
-     * the native SMS uploader can forward messages with no JS running. Passing a
-     * null/blank token clears it (sign-out / consent revocation).
+     * Mirrors the signed-in access + refresh token (and device id) into
+     * SharedPreferences so the native SMS uploader can forward messages with no
+     * JS running and can rotate its own short-lived access token. Passing a
+     * null/blank access token clears both tokens (sign-out / consent revocation).
      */
     @ReactMethod
-    fun setSyncCredentials(accessToken: String?, deviceId: String?, promise: Promise) {
+    fun setSyncCredentials(
+        accessToken: String?,
+        refreshToken: String?,
+        deviceId: String?,
+        promise: Promise,
+    ) {
         try {
             val editor = reactContext
                 .getSharedPreferences(SYNC_PREFS, Context.MODE_PRIVATE)
                 .edit()
             if (accessToken.isNullOrBlank()) {
                 editor.remove(PREF_ACCESS_TOKEN)
+                editor.remove(PREF_REFRESH_TOKEN)
             } else {
                 editor.putString(PREF_ACCESS_TOKEN, accessToken)
+                if (!refreshToken.isNullOrBlank()) {
+                    editor.putString(PREF_REFRESH_TOKEN, refreshToken)
+                }
             }
             if (!deviceId.isNullOrBlank()) {
                 editor.putString(PREF_DEVICE_ID, deviceId)
@@ -400,6 +410,7 @@ class SmsReaderModule(private val reactContext: ReactApplicationContext) :
         // Shared with SmsUploader/SmsConsent.
         const val SYNC_PREFS = "gstflow_client_prefs"
         const val PREF_ACCESS_TOKEN = "access_token"
+        const val PREF_REFRESH_TOKEN = "refresh_token"
         const val PREF_DEVICE_ID = "device_id"
 
         @Volatile

@@ -330,11 +330,14 @@ export class AuthService {
       };
     }
 
-    await this.prisma.refreshToken.update({
-      where: { id: stored.id },
-      data: { revokedAt: new Date() },
+    // The refresh token is deliberately not rotated: the same bearer token is
+    // shared by the JS app and the native background uploader, and rotating it
+    // would let one layer invalidate the other's stored token and force a
+    // sign-out. Revocation is still honoured (logout revokes the row).
+    const accessToken = await this.jwt.signAsync(actorToPayload(actor), {
+      expiresIn: this.accessTtl,
     });
-    return this.issueTokens(actor);
+    return { accessToken, refreshToken, expiresIn: this.accessTtl };
   }
 
   async logout(refreshToken: string): Promise<{ success: boolean }> {

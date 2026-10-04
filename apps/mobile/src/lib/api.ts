@@ -25,10 +25,11 @@ export const api = new GstFlowApi({
     // Must be awaited: the ApiClient retries the failed request as soon as this
     // resolves, so the rotated tokens have to be persisted first.
     await updateStoredTokens(tokens);
-    // Keep the native uploader's token current so background forwards keep
-    // working after the short-lived access token rolls over.
+    // Keep the native uploader's tokens current so background forwards keep
+    // working after the short-lived access token rolls over. The refresh token
+    // lets native rotate the access token on its own when JS is not running.
     try {
-      await SmsReader.setSyncCredentials(tokens.accessToken);
+      await SmsReader.setSyncCredentials(tokens.accessToken, tokens.refreshToken);
     } catch {
       void 0;
     }

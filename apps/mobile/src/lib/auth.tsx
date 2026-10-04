@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
       try {
         if (session) {
           const deviceId = await getOrCreateAndroidId();
-          await SmsReader.setSyncCredentials(session.accessToken, deviceId);
+          await SmsReader.setSyncCredentials(session.accessToken, session.refreshToken, deviceId);
         } else {
           await SmsReader.setSyncCredentials(null);
         }
