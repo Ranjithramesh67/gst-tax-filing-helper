@@ -32,7 +32,7 @@ Execution mode: subagent-driven-development
 | 8 | Server e2e for grouping + inbox (+ staff `/inbox` scoping fix) | done (review clean) | `3d10641`, `a277c9c` |
 | 9 | Kotlin OTP extractor (parity) | done (review clean after fix) | `008c5f3`, `2f1c9f4` |
 | 10 | Encrypted account store + registry | done (review clean) | `23be95a` |
-| 11 | `EmailConnector` interface + IMAP | pending | - |
+| 11 | `EmailConnector` interface + IMAP | done (review clean after fixes) | `24f5ccf`, `e98f68c`, `88f570f` |
 | 12 | Poller + outbox + retry job | pending | - |
 | 13 | RN bridge + JS wrapper + consent | pending | - |
 | 14 | Mobile email settings screen | pending | - |
