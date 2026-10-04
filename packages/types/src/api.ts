@@ -118,6 +118,29 @@ export interface SmsIngestResponse {
   ids: string[];
 }
 
+export interface OtpIngestItem {
+  code: string;
+  source: 'EMAIL';
+  fromAddress?: string;
+  subject?: string;
+  snippet?: string;
+  receivedAt: string;
+  deviceId?: string;
+  /** Provider message id. Always required so dedupe never sees a NULL key. */
+  sourceRef: string;
+}
+
+export interface OtpIngestBody {
+  items: OtpIngestItem[];
+}
+
+export interface OtpIngestResponse {
+  accepted: number;
+  duplicates: number;
+  rejected: number;
+  ids: string[];
+}
+
 export interface ClassifySmsBody {
   category: SmsMessage['category'];
   status?: SmsMessage['status'];
