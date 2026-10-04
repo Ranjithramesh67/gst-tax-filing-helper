@@ -22,7 +22,7 @@ Execution mode: subagent-driven-development
 
 | # | Task | Status | Commits |
 |---|------|--------|---------|
-| 1 | `@gstflow/otp` extractor package | in-progress | - |
+| 1 | `@gstflow/otp` extractor package | done (review clean) | `baa0131`, `7dc459a` |
 | 2 | Prisma `OtpEvent` model + shared types | pending | - |
 | 3 | Extract OTPs from SMS on ingest + backfill | pending | - |
 | 4 | `POST /otp/ingest` + validation | pending | - |
@@ -44,4 +44,12 @@ Execution mode: subagent-driven-development
 
 ## Blocker / notes
 
-- (none yet)
+- (none blocking)
+- **Commit trailer:** the repo's `prepare-commit-msg` hook auto-appends the
+  `Co-authored-by: monkeycode-ai <monkeycode-ai@chaitin.com>` trailer. Do NOT add
+  it manually in commit messages (it produces duplicates).
+- **Task 1 minor findings (deferred to final review):** (a) mask regex is
+  case-sensitive while codes are upper-cased; (b) selection window (±160) is wider
+  than the snippet window (40 before/120 after) so chosen code and snippet can
+  disagree; (c) "nearest token" still lets a preceding year win in e.g.
+  `2026 OTP is 4831`.
