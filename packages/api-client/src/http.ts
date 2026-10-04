@@ -36,12 +36,15 @@ export interface RequestOptions {
 
 function buildQuery(query?: QueryParams): string {
   if (!query) return '';
-  const params = new URLSearchParams();
+  // Built manually instead of URLSearchParams: React Native's (Hermes) polyfill
+  // does not implement `set` and throws "URLSearchParams.set is not implemented".
+  const parts: string[] = [];
   for (const [key, value] of Object.entries(query)) {
-    if (value !== undefined && value !== null && value !== '') params.set(key, String(value));
+    if (value !== undefined && value !== null && value !== '') {
+      parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`);
+    }
   }
-  const qs = params.toString();
-  return qs ? `?${qs}` : '';
+  return parts.length > 0 ? `?${parts.join('&')}` : '';
 }
 
 export class ApiClient {
