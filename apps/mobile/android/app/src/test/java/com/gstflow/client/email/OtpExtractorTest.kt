@@ -73,6 +73,24 @@ class OtpExtractorTest {
     }
 
     @Test
+    fun treatsNbspAsWhitespaceInsideTheKeyword() {
+        val oneTime = OtpExtractor.extract("Your one\u00A0time password is 4831")
+        assertEquals("4831", oneTime?.code)
+        assertEquals("Your one time password is ••••", oneTime?.snippet)
+
+        val verification = OtpExtractor.extract("Your verification\u00A0code is 778899 now")
+        assertEquals("778899", verification?.code)
+        assertEquals("Your verification code is •••• now", verification?.snippet)
+    }
+
+    @Test
+    fun collapsesNbspInTheSnippetLikeTypeScript() {
+        val result = OtpExtractor.extract("Your code is 4831\u00A0\u202FPlease do not share")
+        assertEquals("4831", result?.code)
+        assertEquals("Your code is •••• Please do not share", result?.snippet)
+    }
+
+    @Test
     fun returnsNullForBlankInput() {
         assertNull(OtpExtractor.extract(null))
         assertNull(OtpExtractor.extract(""))

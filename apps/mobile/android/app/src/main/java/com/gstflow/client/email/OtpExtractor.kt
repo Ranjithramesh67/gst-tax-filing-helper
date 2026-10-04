@@ -2,8 +2,15 @@ package com.gstflow.client.email
 
 import kotlin.math.abs
 
+// ECMAScript `\s` is broader than the JVM `\s`: JS also treats NBSP (`\u00A0`),
+// narrow NBSP (`\u202F`) and the other Unicode space separators as whitespace.
+// Emails frequently carry these (e.g. from HTML `&nbsp;`), so use the exact JS set
+// both for the keyword separators and for the whitespace-collapse step.
+private const val ECMASCRIPT_WS =
+    "\u0009\u000A\u000B\u000C\u000D \u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF"
+
 private val KEYWORD = Regex(
-    "\\b(otp|one[\\s-]?time[\\s-]?password|verification[\\s-]?code|security[\\s-]?code|login[\\s-]?code|verification|verify|code)\\b",
+    "\\b(otp|one[$ECMASCRIPT_WS-]?time[$ECMASCRIPT_WS-]?password|verification[$ECMASCRIPT_WS-]?code|security[$ECMASCRIPT_WS-]?code|login[$ECMASCRIPT_WS-]?code|verification|verify|code)\\b",
     RegexOption.IGNORE_CASE,
 )
 private val GST_NOISE = Regex(
@@ -13,7 +20,8 @@ private val GST_NOISE = Regex(
 private val TOKEN = Regex("\\b[A-Za-z0-9]{4,8}\\b")
 private val PURE_CODE = Regex("^(otp|code)$", RegexOption.IGNORE_CASE)
 private val HAS_DIGIT = Regex("[0-9]")
-private val WHITESPACE = Regex("\\s+")
+private val WHITESPACE = Regex("[$ECMASCRIPT_WS]+")
+private val ECMASCRIPT_WS_CHAR = Regex("[$ECMASCRIPT_WS]")
 private const val WINDOW = 160
 private const val MASK = "••••"
 
@@ -62,7 +70,7 @@ object OtpExtractor {
         val snippet = input.substring(start, end)
             .replace(mask, MASK)
             .replace(WHITESPACE, " ")
-            .trim()
+            .trim { ECMASCRIPT_WS_CHAR.matches(it.toString()) }
 
         return ExtractedOtp(code = token.uppercase(), snippet = snippet)
     }
