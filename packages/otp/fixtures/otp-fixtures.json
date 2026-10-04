@@ -1,0 +1,8 @@
+[
+  { "text": "123456 is your OTP for login. Do not share.", "expect": { "code": "123456" }, "note": "plain OTP" },
+  { "text": "Use 4831 to verify your email", "expect": { "code": "4831" }, "note": "4 digit" },
+  { "text": "Your one time password is A1B2C3", "expect": { "code": "A1B2C3" }, "note": "alphanumeric" },
+  { "text": "GSTIN 29ABCDE1234F1Z5 invoice inv-8891 amount Rs. 12345", "expect": null, "note": "GST false positive" },
+  { "text": "GSTR-3B for 2026-09 filed, ARN AA290926000123", "expect": null, "note": "ARN false positive" },
+  { "text": "Your order shipped today", "expect": null, "note": "no OTP" }
+]
