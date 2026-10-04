@@ -1,6 +1,7 @@
 package com.gstflow.client
 
 import android.app.Application
+import android.util.Log
 import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
@@ -11,6 +12,9 @@ import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.load
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.facebook.react.defaults.DefaultReactNativeHost
 import com.facebook.soloader.SoLoader
+import com.gstflow.client.email.EmailAccounts
+import com.gstflow.client.email.EmailOtpOutbox
+import com.gstflow.client.email.EmailRetryJobService
 import com.gstflow.client.sms.SmsReaderPackage
 import java.io.File
 
@@ -57,5 +61,24 @@ class MainApplication : Application(), ReactApplication {
         if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
             load()
         }
+        // The email account registry must be initialized before the poller, RN
+        // bridge or any service reads it. Never let a keystore failure crash
+        // app launch: without it the poller simply logs and skips.
+        try {
+            EmailAccounts.init(this)
+        } catch (error: Exception) {
+            Log.w(TAG, "Unable to initialize email accounts: ${error.message}")
+        }
+        // Resume a retry that was queued before the process died. The job is
+        // persisted, but rescheduling covers reboots where JobScheduler forgets.
+        try {
+            if (EmailOtpOutbox.size(this) > 0) EmailRetryJobService.schedule(this)
+        } catch (error: Exception) {
+            Log.w(TAG, "Unable to schedule email retry job: ${error.message}")
+        }
+    }
+
+    private companion object {
+        const val TAG = "MainApplication"
     }
 }

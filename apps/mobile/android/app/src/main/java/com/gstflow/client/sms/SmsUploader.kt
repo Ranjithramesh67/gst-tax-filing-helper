@@ -117,7 +117,7 @@ object SmsUploader {
      * was refreshed. All failures are non-fatal: the outbox retry job will try
      * again later.
      */
-    private fun refreshAccessToken(
+    internal fun refreshAccessToken(
         context: Context,
         base: String,
         connectTimeoutMs: Int,
@@ -165,7 +165,7 @@ object SmsUploader {
         }
     }
 
-    private fun readAccessToken(context: Context): String? {
+    internal fun readAccessToken(context: Context): String? {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val mirrored = prefs.getString(PREF_ACCESS_TOKEN, null)
         if (!mirrored.isNullOrBlank()) return mirrored
@@ -195,7 +195,7 @@ object SmsUploader {
         }
     }
 
-    private fun readDeviceId(context: Context): String? {
+    internal fun readDeviceId(context: Context): String? {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val mirrored = prefs.getString(PREF_DEVICE_ID, null)
         if (!mirrored.isNullOrBlank()) return mirrored

@@ -14,6 +14,7 @@ import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.gstflow.client.MainActivity
+import com.gstflow.client.email.EmailPoller
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -32,6 +33,10 @@ class SmsForegroundService : Service() {
     // finish so the process is not killed mid-request.
     private val uploadExecutor: ExecutorService = Executors.newSingleThreadExecutor()
 
+    // Email polling runs on its own thread so a slow mailbox read can never
+    // delay the SMS upload above. Throttled to the 15-min cadence by the poller.
+    private val pollExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+
     // Held only while an upload is in flight so a sleeping device still completes
     // the request and forwards the OTP/SMS.
     private var wakeLock: PowerManager.WakeLock? = null
@@ -41,11 +46,16 @@ class SmsForegroundService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        // Poll email on the service tick (at most once per 15 min). The service
+        // is started per SMS, so this opportunistically refreshes email OTPs
+        // without changing the existing per-message SMS behavior.
+        pollExecutor.execute { EmailPoller.pollIfDue(applicationContext) }
     }
 
     override fun onDestroy() {
         releaseWakeLock()
         uploadExecutor.shutdown()
+        pollExecutor.shutdown()
         super.onDestroy()
     }
 

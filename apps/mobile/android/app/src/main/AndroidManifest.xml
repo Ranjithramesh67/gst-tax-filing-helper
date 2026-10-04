@@ -55,6 +55,13 @@
             android:enabled="true"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />
+
+        <!-- Retries email OTP outbox uploads; mirrors SmsRetryJobService. -->
+        <service
+            android:name=".email.EmailRetryJobService"
+            android:enabled="true"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
     </application>
 
 </manifest>

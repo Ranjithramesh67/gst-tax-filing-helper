@@ -111,6 +111,13 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    // JVM unit tests exercise pollers/uploaders that log through android.util.Log.
+    // The stubbed android.jar throws on those calls by default; return harmless
+    // defaults instead so the pure logic paths can be tested without Robolectric.
+    testOptions {
+        unitTests.returnDefaultValues = true
+    }
 }
 
 dependencies {
