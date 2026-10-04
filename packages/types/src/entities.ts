@@ -573,6 +573,7 @@ export interface OtpEvent {
   snippet: string | null;
   receivedAt: string;
   groupId: string | null;
+  sourceRef: string | null;
   createdAt: string;
 }
 
