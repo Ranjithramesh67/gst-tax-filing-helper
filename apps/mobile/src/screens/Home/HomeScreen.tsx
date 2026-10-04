@@ -343,6 +343,20 @@ export function HomeScreen(): React.ReactElement {
         </Pressable>
       </Card>
 
+      <Card title="Email OTP forwarding">
+        <Text style={styles.helper}>
+          Link an email account to pick up OTP emails without forwarding the whole inbox. Email
+          capture stays off until you turn it on.
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => navigation.navigate('EmailSettings')}
+          style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]}
+        >
+          <Text style={styles.primaryButtonText}>Manage email accounts</Text>
+        </Pressable>
+      </Card>
+
       <Card title="Consent">
         <InfoRow
           label="Status"

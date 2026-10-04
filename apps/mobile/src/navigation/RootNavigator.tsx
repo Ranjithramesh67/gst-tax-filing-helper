@@ -8,6 +8,7 @@ import OtpScreen from '@/screens/Otp/OtpScreen';
 import HomeScreen from '@/screens/Home/HomeScreen';
 import SmsLogScreen from '@/screens/SmsLog/SmsLogScreen';
 import SettingsScreen from '@/screens/Settings/SettingsScreen';
+import EmailSettingsScreen from '@/screens/Email/EmailSettingsScreen';
 import LinksScreen from '@/screens/Links/LinksScreen';
 import NotificationsScreen from '@/screens/Notifications/NotificationsScreen';
 import { AuthProvider, useAuth } from '@/lib/auth';
@@ -21,6 +22,7 @@ export type RootStackParamList = {
   Links: undefined;
   Notifications: undefined;
   Settings: undefined;
+  EmailSettings: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -57,6 +59,11 @@ function RootNavigatorInner(): React.ReactElement {
             name="Settings"
             component={SettingsScreen}
             options={{ title: 'Settings' }}
+          />
+          <Stack.Screen
+            name="EmailSettings"
+            component={EmailSettingsScreen}
+            options={{ title: 'Email accounts' }}
           />
         </>
       ) : (
