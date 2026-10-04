@@ -1,5 +1,8 @@
 import { SmsCategory, SmsStatus } from '@gstflow/types';
 
+export { extractOtp } from '@gstflow/otp';
+export type { ExtractedOtp } from '@gstflow/otp';
+
 export type BadgeTone = 'neutral' | 'success' | 'warning' | 'danger' | 'info';
 
 export const SMS_CATEGORIES: SmsCategory[] = [
@@ -64,17 +67,4 @@ export function formatMoney(value?: number | null): string {
 export function snippet(body: string, length = 80): string {
   const trimmed = body.trim();
   return trimmed.length > length ? `${trimmed.slice(0, length)}...` : trimmed;
-}
-
-const OTP_KEYWORD = /\b(?:otp|one\s+time\s+password)\b/i;
-
-export function extractOtp(body?: string | null): string | null {
-  if (!body) return null;
-  const match = OTP_KEYWORD.exec(body);
-  if (!match) return null;
-  const tail = body.slice(match.index, match.index + 160);
-  const tokens = tail.match(/\b[A-Za-z0-9]{4,8}\b/g);
-  if (!tokens) return null;
-  const token = tokens.find((value) => /[0-9]/.test(value));
-  return token ? token.toUpperCase() : null;
 }

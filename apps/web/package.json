@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@gstflow/api-client": "*",
+    "@gstflow/otp": "*",
     "@gstflow/types": "*",
     "@gstflow/validation": "*",
     "@tanstack/react-query": "^5.59.0",

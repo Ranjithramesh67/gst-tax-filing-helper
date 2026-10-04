@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight, Mail } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useFirmPath } from '@/lib/firm';
 import { Badge, Button, Card, EmptyState, PageHeader, Select, Spinner } from '@/components/ui';
+import { OtpCard } from '@/components/sms/OtpCard';
 import {
   CATEGORY_TONES,
   SMS_CATEGORIES,
@@ -53,10 +54,10 @@ export default function SmsInboxPage() {
     queryFn: () => api.clients.list({ pageSize: 200 }),
   });
 
-  const sms = useQuery({
-    queryKey: ['sms', { page, pageSize: PAGE_SIZE, clientId, category, status }],
+  const inbox = useQuery({
+    queryKey: ['inbox', { page, pageSize: PAGE_SIZE, clientId, category, status }],
     queryFn: () =>
-      api.sms.list({
+      api.inbox.list({
         page,
         pageSize: PAGE_SIZE,
         clientId: clientId || undefined,
@@ -75,9 +76,9 @@ export default function SmsInboxPage() {
     };
   }
 
-  const items = sms.data?.items ?? [];
-  const total = sms.data?.total ?? 0;
-  const totalPages = sms.data?.totalPages ?? 1;
+  const items = inbox.data?.items ?? [];
+  const total = inbox.data?.total ?? 0;
+  const totalPages = inbox.data?.totalPages ?? 1;
 
   return (
     <div>
@@ -138,14 +139,14 @@ export default function SmsInboxPage() {
       </Card>
 
       <Card>
-        {sms.isLoading ? (
+        {inbox.isLoading ? (
           <Spinner label="Loading messages..." />
-        ) : sms.isError ? (
+        ) : inbox.isError ? (
           <div className="px-4 py-10 text-center text-sm text-red-600">
-            {sms.error instanceof Error ? sms.error.message : 'Failed to load messages'}
+            {inbox.error instanceof Error ? inbox.error.message : 'Failed to load messages'}
           </div>
         ) : items.length === 0 ? (
-          <EmptyState title="No SMS messages" description="Try adjusting the filters or wait for client devices to sync." />
+          <EmptyState title="No messages" description="Try adjusting the filters or wait for client devices to sync." />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
@@ -153,7 +154,7 @@ export default function SmsInboxPage() {
                 <tr>
                   <th className="px-4 py-3 font-medium">Received</th>
                   <th className="px-4 py-3 font-medium">Client</th>
-                  <th className="px-4 py-3 font-medium">Sender</th>
+                  <th className="px-4 py-3 font-medium">From</th>
                   <th className="px-4 py-3 font-medium">Category</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium">Message</th>
@@ -161,46 +162,76 @@ export default function SmsInboxPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {items.map((message) => (
-                  <tr key={message.id} className="transition hover:bg-slate-50">
-                    <td className="px-4 py-3 whitespace-nowrap text-slate-600">
-                      {formatDateTime(message.receivedAt)}
-                    </td>
-                    <td className="px-4 py-3 text-slate-800">
-                      <Link href={to(`/sms/${message.id}`)} className="font-medium hover:text-brand-700">
-                        {message.client?.name ?? '-'}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">{message.sender}</td>
-                    <td className="px-4 py-3">
-                      <Badge tone={CATEGORY_TONES[message.category]}>{categoryLabel(message.category)}</Badge>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge tone={STATUS_TONES[message.status]}>{categoryLabel(message.status)}</Badge>
-                    </td>
-                    <td className="max-w-xs px-4 py-3 text-slate-500">
-                      <Link href={to(`/sms/${message.id}`)} className="block truncate hover:text-slate-800">
-                        {snippet(message.body)}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      {extractOtp(message.body) ? (
-                        <span className="font-mono font-semibold tracking-wider text-slate-800">
-                          {extractOtp(message.body)}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400">-</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {items.map((item) =>
+                  item.kind === 'OTP' ? (
+                    <tr key={item.id} className="transition hover:bg-slate-50">
+                      <td className="px-4 py-3 whitespace-nowrap text-slate-600">
+                        {formatDateTime(item.receivedAt)}
+                      </td>
+                      <td className="px-4 py-3 text-slate-800">
+                        <Link
+                          href={to(`/sms/otp/${item.id}`)}
+                          className="font-medium hover:text-brand-700"
+                        >
+                          {item.client.name || '-'}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">{item.from ?? '-'}</td>
+                      <td className="px-4 py-3 text-slate-400">-</td>
+                      <td className="px-4 py-3 text-slate-400">-</td>
+                      <td className="max-w-xs px-4 py-3 text-slate-500">
+                        <Link
+                          href={to(`/sms/otp/${item.id}`)}
+                          className="block truncate hover:text-slate-800"
+                        >
+                          {item.snippet ?? item.subject ?? '-'}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <OtpCard item={item} />
+                      </td>
+                    </tr>
+                  ) : (
+                    <tr key={item.id} className="transition hover:bg-slate-50">
+                      <td className="px-4 py-3 whitespace-nowrap text-slate-600">
+                        {formatDateTime(item.receivedAt)}
+                      </td>
+                      <td className="px-4 py-3 text-slate-800">
+                        <Link href={to(`/sms/${item.id}`)} className="font-medium hover:text-brand-700">
+                          {item.client?.name ?? '-'}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">{item.sender}</td>
+                      <td className="px-4 py-3">
+                        <Badge tone={CATEGORY_TONES[item.category]}>{categoryLabel(item.category)}</Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge tone={STATUS_TONES[item.status]}>{categoryLabel(item.status)}</Badge>
+                      </td>
+                      <td className="max-w-xs px-4 py-3 text-slate-500">
+                        <Link href={to(`/sms/${item.id}`)} className="block truncate hover:text-slate-800">
+                          {snippet(item.body)}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {extractOtp(item.body)?.code ? (
+                          <span className="font-mono font-semibold tracking-wider text-slate-800">
+                            {extractOtp(item.body)?.code}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  ),
+                )}
               </tbody>
             </table>
           </div>
         )}
       </Card>
 
-      {!sms.isLoading && !sms.isError && total > 0 ? (
+      {!inbox.isLoading && !inbox.isError && total > 0 ? (
         <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
           <span>
             {total} message{total === 1 ? '' : 's'} &middot; page {page} of {totalPages}
@@ -224,7 +255,7 @@ export default function SmsInboxPage() {
         </div>
       ) : null}
 
-      {sms.isFetching && !sms.isLoading ? (
+      {inbox.isFetching && !inbox.isLoading ? (
         <p className="mt-3 flex items-center gap-2 text-xs text-slate-400">
           <Mail className="h-3 w-3" /> Refreshing...
         </p>
