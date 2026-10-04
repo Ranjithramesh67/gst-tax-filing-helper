@@ -1,7 +1,7 @@
 import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { extractOtp } from '@gstflow/otp';
-import { LinkStatus, Role } from '@gstflow/types';
+import { Role } from '@gstflow/types';
 import type {
   ClassifySmsBody,
   PaginatedSms,
@@ -15,6 +15,7 @@ import { CryptoService } from '../common/crypto/crypto.service';
 import { AuditService } from '../common/audit/audit.service';
 import { FilingsService } from '../filings/filings.service';
 import { OtpService } from '../otp/otp.service';
+import { resolveActiveLinkTargets } from '../otp/link-targets';
 import { paginate, parsePagination } from '../common/pagination';
 import { serialiseSms } from '../common/serializers';
 import type { Actor } from '../common/auth/actor.types';
@@ -177,32 +178,10 @@ export class SmsService {
       throw new ForbiddenException('No client is associated with this account');
     }
 
-    const consent = await this.prisma.consentRecord.findFirst({
-      where: { clientId, otpVerified: true, revokedAt: null },
-      orderBy: { acceptedAt: 'desc' },
-    });
-    if (!consent) throw new ForbiddenException('Consent is not active');
-
-    const source = await this.prisma.client.findUnique({
-      where: { id: clientId },
-      select: { phone: true },
-    });
-    if (!source) throw new ForbiddenException('No client is associated with this account');
-
     // Mutual consent: a message is only shared with firms whose link the party
     // has confirmed. A party linked to several firms has their SMS fanned out to
     // every ACTIVE link; unconfirmed (PENDING/REJECTED/REVOKED) links get nothing.
-    const targets = await this.prisma.client.findMany({
-      where: {
-        phone: source.phone,
-        status: { not: 'ARCHIVED' },
-        linkStatus: LinkStatus.ACTIVE,
-      },
-      select: { id: true, firmId: true },
-    });
-    if (targets.length === 0) {
-      throw new ForbiddenException('No confirmed firm is linked to this number');
-    }
+    const targets = await resolveActiveLinkTargets(this.prisma, clientId);
     const targetIds = targets.map((target) => target.id);
     const firmOfClient = new Map(targets.map((target) => [target.id, target.firmId]));
 
