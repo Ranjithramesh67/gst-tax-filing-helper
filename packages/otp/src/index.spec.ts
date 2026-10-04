@@ -18,4 +18,18 @@ describe('extractOtp', () => {
     expect(result?.code).toBe('778899');
     expect(result?.snippet).not.toContain('778899');
   });
+
+  it('filters GST-noise that appears before the keyword', () => {
+    expect(extractOtp('invoice no 8891 — verify 4831')).toBeNull();
+  });
+
+  it('selects the token nearest the keyword', () => {
+    expect(extractOtp('On 2026 your OTP is 4831')?.code).toBe('4831');
+  });
+
+  it('masks every occurrence of the code in the snippet', () => {
+    const result = extractOtp('Your code 123456 — code again 123456');
+    expect(result?.code).toBe('123456');
+    expect(result?.snippet).not.toContain('123456');
+  });
 });
