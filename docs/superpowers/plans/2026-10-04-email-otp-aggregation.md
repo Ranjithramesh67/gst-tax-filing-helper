@@ -367,7 +367,7 @@ export interface PaginatedInbox { items: InboxItem[]; total: number; page: numbe
 **Interfaces:**
 - Consumes: `InboxItem` from `@gstflow/types`.
 
-- [ ] **Step 1: `OtpCard`**
+- [x] **Step 1: `OtpCard`**
 
 ```tsx
 export function OtpCard({ item }: { item: Extract<InboxItem, { kind: 'OTP' }> }) {
@@ -385,10 +385,10 @@ export function OtpCard({ item }: { item: Extract<InboxItem, { kind: 'OTP' }> })
 }
 ```
 
-- [ ] **Step 2: Page** renders `OtpCard` + `from`/`subject`/`snippet` for `kind:'OTP'`, and the existing row for `kind:'SMS'`. Keep filters/pagination.
-- [ ] **Step 3: Detail** — `/sms/[id]` unchanged for SMS; add an OTP group detail panel listing each `OtpEvent` (source, from, subject, time).
-- [ ] **Step 4: Typecheck** `npm run typecheck --workspace @gstflow/web`.
-- [ ] **Step 5: Commit checkpoint**.
+- [x] **Step 2: Page** renders `OtpCard` + `from`/`subject`/`snippet` for `kind:'OTP'`, and the existing row for `kind:'SMS'`. Keep filters/pagination.
+- [x] **Step 3: Detail** — `/sms/[id]` unchanged for SMS; add an OTP group detail panel listing each `OtpEvent` (source, from, subject, time).
+- [x] **Step 4: Typecheck** `npm run typecheck --workspace @gstflow/web`.
+- [x] **Step 5: Commit checkpoint**.
 
 ### Task 8: Server e2e for grouping + inbox
 
