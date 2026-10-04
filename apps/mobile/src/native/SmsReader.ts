@@ -1,5 +1,5 @@
 import { NativeEventEmitter, NativeModules, Platform } from 'react-native';
-import { hashMessage } from '../lib/gstFilter';
+import { hashMessage, normaliseReceivedAt } from '../lib/gstFilter';
 
 /**
  * Typed JS wrapper over the Android `SmsReader` native module, with a web/no-op
@@ -56,7 +56,9 @@ const nativeModule: SmsReaderNativeModule | null =
 const emitter = nativeModule ? new NativeEventEmitter(NativeModules.SmsReader) : null;
 
 function toReceivedSms(payload: NativeSmsPayload): ReceivedSms {
-  const receivedAt = payload.receivedAtIso ?? new Date(payload.receivedAt).toISOString();
+  const receivedAt = normaliseReceivedAt(
+    payload.receivedAtIso ?? new Date(payload.receivedAt).toISOString(),
+  );
   return {
     sender: payload.sender ?? '',
     body: payload.body ?? '',

@@ -39,6 +39,23 @@ function toNumber(value: string | undefined): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+/**
+ * Canonical de-duplication hash for an ingested SMS. The client sends its own
+ * hash, but the broadcast timestamp and the inbox `date` column can differ in
+ * sub-second precision for the same physical message. Hashing the body with a
+ * whole-second timestamp makes both capture paths (and any client version)
+ * collide, so the same SMS is stored once per client.
+ */
+export function canonicalSmsHash(
+  hash: (value: string) => string,
+  sender: string,
+  body: string,
+  receivedAt: Date,
+): string {
+  const seconds = Math.floor(receivedAt.getTime() / 1000) * 1000;
+  return hash(`${sender}|${body}|${new Date(seconds).toISOString()}`);
+}
+
 function hasParsedField(parsed: ReturnType<typeof parseGstSms>): boolean {
   return (
     parsed.gstin != null ||
@@ -241,7 +258,7 @@ export class SmsService {
               bodyEncrypted: this.crypto.encrypt(item.body),
               receivedAt,
               category: classifySms(item.body, item.sender),
-              hash: item.hash,
+              hash: canonicalSmsHash(this.crypto.hash, item.sender, item.body, receivedAt),
             },
           });
           createdAny = true;

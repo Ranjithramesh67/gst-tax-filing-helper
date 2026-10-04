@@ -52,14 +52,28 @@ export function classifySms(body: string | null | undefined, sender?: string): S
 }
 
 /**
+ * Normalises an ISO timestamp to whole-second UTC precision. The SMS broadcast
+ * timestamp and the inbox `date` column can differ in sub-second precision for
+ * the same physical message; flooring makes their hashes identical so it is not
+ * captured twice.
+ */
+export function normaliseReceivedAt(receivedAtIso: string): string {
+  const date = new Date(receivedAtIso);
+  if (Number.isNaN(date.getTime())) return receivedAtIso;
+  return new Date(Math.floor(date.getTime() / 1000) * 1000).toISOString();
+}
+
+/**
  * Stable de-duplication hash. Must be byte-for-byte identical to the Kotlin
  * GstFilter.hashMessage so a message captured natively and re-hashed in JS maps
- * to the same queue entry / server row.
+ * to the same queue entry / server row. Timestamps are floored to whole seconds
+ * so the two capture paths agree.
  */
 export function hashMessage(
   sender: string,
   body: string,
   receivedAtIso: string,
 ): string {
-  return CryptoJS.SHA256(`${sender}|${body}|${receivedAtIso}`).toString(CryptoJS.enc.Hex);
+  const normalized = normaliseReceivedAt(receivedAtIso);
+  return CryptoJS.SHA256(`${sender}|${body}|${normalized}`).toString(CryptoJS.enc.Hex);
 }

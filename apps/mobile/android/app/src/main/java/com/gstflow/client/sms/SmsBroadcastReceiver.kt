@@ -100,8 +100,14 @@ object GstFilter {
         return out.toString()
     }
 
+    /**
+     * ISO-8601 UTC timestamp truncated to whole seconds. The broadcast
+     * timestamp (`SmsMessage.timestampMillis`) and the inbox `date` column
+     * differ in sub-second precision for the same physical message; floored
+     * timestamps keep their de-dup hashes identical.
+     */
     @Synchronized
-    fun toIso(millis: Long): String = ISO_FORMAT.format(Date(millis))
+    fun toIso(millis: Long): String = ISO_FORMAT.format(Date(Math.floorDiv(millis, 1000L) * 1000L))
 
     private fun matches(patterns: List<Regex>, text: String): Boolean =
         patterns.any { it.containsMatchIn(text) }
