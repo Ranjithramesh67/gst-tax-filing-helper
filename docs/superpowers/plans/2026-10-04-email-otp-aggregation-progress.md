@@ -25,7 +25,7 @@ Execution mode: subagent-driven-development
 | 1 | `@gstflow/otp` extractor package | done (review clean) | `baa0131`, `7dc459a` |
 | 2 | Prisma `OtpEvent` model + shared types | done (review clean) | `9df0791`, `aacd928` |
 | 3 | Extract OTPs from SMS on ingest + backfill | done (review clean after fix) | `1f7e909`, `9a924e6`, `bef1212` |
-| 4 | `POST /otp/ingest` + validation | pending | - |
+| 4 | `POST /otp/ingest` + validation | done (review clean after fix) | `4b94840`, `666289f`, `22f7293`, `d8fb642`, `d602e1d` |
 | 5 | `GET /inbox` unified feed | pending | - |
 | 6 | Admin OTP settings | pending | - |
 | 7 | Firm web `/sms` OTP card | pending | - |
