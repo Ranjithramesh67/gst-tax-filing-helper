@@ -33,6 +33,11 @@ displayed time.
    inbox (`/sms`) and the client mobile log (`SmsLogScreen`).
 6. **Reliability:** Email polling must keep working when the app is killed, reusing
    the existing foreground service + `JobScheduler` retry pattern.
+7. **Feed source:** The grouped feed is **server-backed for both UIs**. The mobile
+   log fetches the same grouped feed as the firm and overlays its not-yet-synced
+   locally-queued SMS on top, rather than computing grouping on the phone. One
+   grouping implementation, client and firm always agree; offline shows the queued
+   overlay only.
 
 ## Architecture
 
@@ -56,11 +61,10 @@ Server                                                 │
               compact OTP card, source badges, one grouped row
 ```
 
-**Key call to confirm before implementation:** the grouped feed is
-**server-backed for both UIs**. `SmsLogScreen` stops rendering its locally-merged
-raw SMS list and instead shows the server feed, with not-yet-synced locally-queued
-SMS overlaid at the top. This is what makes "compare both channels, show one
-latest" consistent between the firm and the client.
+The grouped feed is **server-backed for both UIs** (decision 7). `SmsLogScreen`
+stops rendering its locally-merged raw SMS list and instead shows the server feed,
+with not-yet-synced locally-queued SMS overlaid at the top. This is what makes
+"compare both channels, show one latest" consistent between the firm and client.
 
 ## Data model (additive)
 
