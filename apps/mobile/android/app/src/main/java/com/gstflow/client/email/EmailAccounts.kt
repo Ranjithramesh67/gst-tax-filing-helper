@@ -51,6 +51,23 @@ data class EmailAccount(
         putOpt("lastError", lastError)
     }
 
+    /**
+     * Non-secret projection handed to JS by the account bridge. Deliberately
+     * omits [secretRef] (the IMAP app password) and [oauthTokenJson]: credentials
+     * stay in the encrypted store and are never exposed across the bridge.
+     */
+    fun toPublicJson(): JSONObject = JSONObject().apply {
+        put("id", id)
+        put("provider", provider.name)
+        put("address", address)
+        putOpt("imapHost", imapHost)
+        putOpt("imapPort", imapPort)
+        putOpt("cursor", cursor)
+        put("enabled", enabled)
+        putOpt("lastPolledAt", lastPolledAt)
+        putOpt("lastError", lastError)
+    }
+
     companion object {
         fun fromJson(json: JSONObject): EmailAccount? {
             val id = json.optString("id", "")
@@ -114,6 +131,9 @@ class EmailAccountStore(private val prefs: KeyValueStore) {
     }
 
     @Synchronized
+    fun setEnabled(id: String, enabled: Boolean) = update(id) { it.copy(enabled = enabled) }
+
+    @Synchronized
     fun setCursor(id: String, cursor: String?) = update(id) { it.copy(cursor = cursor) }
 
     @Synchronized
@@ -159,6 +179,14 @@ class EmailAccountStore(private val prefs: KeyValueStore) {
 object EmailAccounts {
     private const val PREFS_FILE = "gstflow_email_accounts"
 
+    /**
+     * Email-reading consent lives in ordinary synchronous prefs (not the
+     * encrypted account store) because it is a non-secret flag the poller and
+     * retry job must read with no JS running. Defaults to off.
+     */
+    private const val CONSENT_PREFS = "gstflow_email_consent"
+    private const val KEY_CONSENT = "consent"
+
     @Volatile
     private var store: EmailAccountStore? = null
 
@@ -178,10 +206,27 @@ object EmailAccounts {
 
     fun remove(id: String) = requireStore().remove(id)
 
+    fun setEnabled(id: String, enabled: Boolean) = requireStore().setEnabled(id, enabled)
+
     fun setCursor(id: String, cursor: String?) = requireStore().setCursor(id, cursor)
 
     fun markStatus(id: String, lastPolledAt: Long?, error: String? = null) =
         requireStore().markStatus(id, lastPolledAt, error)
+
+    /** Persists the email-reading consent flag for native readers (poller/retry). */
+    fun setConsent(context: Context, granted: Boolean) {
+        context.applicationContext
+            .getSharedPreferences(CONSENT_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_CONSENT, granted)
+            .apply()
+    }
+
+    /** True only after the user has explicitly granted email-reading consent. */
+    fun isConsentGranted(context: Context): Boolean =
+        context.applicationContext
+            .getSharedPreferences(CONSENT_PREFS, Context.MODE_PRIVATE)
+            .getBoolean(KEY_CONSENT, false)
 }
 
 /** [KeyValueStore] backed by AES256_GCM/SIV [EncryptedSharedPreferences]. */

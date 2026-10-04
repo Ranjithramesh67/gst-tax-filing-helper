@@ -3,13 +3,17 @@ import type { Client, OtpVerifyResponse } from '@gstflow/types';
 import { api, setUnauthorizedHandler } from './api';
 import { setSessionChecker, syncNow } from './smsSync';
 import { getOrCreateAndroidId } from './device';
+import { EmailAccounts } from '@/native/EmailAccounts';
 import { SmsReader } from '@/native/SmsReader';
 import {
+  clearEmailConsent,
   clearReadingEnabled,
   clearStoredConsent,
   clearStoredSession,
+  getEmailConsent,
   getReadingEnabled,
   getStoredSession,
+  setEmailConsent as persistEmailConsent,
   setStoredConsent,
   setStoredSession,
   type StoredSession,
@@ -19,6 +23,9 @@ export interface AuthContextValue {
   session: StoredSession | null;
   client: Client | null;
   loading: boolean;
+  /** Email-reading consent. Off by default; mirrors to the native poller. */
+  emailConsent: boolean;
+  setEmailConsent: (enabled: boolean) => Promise<void>;
   signIn: (result: OtpVerifyResponse) => Promise<void>;
   signOut: () => Promise<void>;
   revokeConsent: () => Promise<void>;
@@ -29,13 +36,15 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }): React.ReactElement {
   const [session, setSession] = useState<StoredSession | null>(null);
   const [loading, setLoading] = useState(true);
+  const [emailConsent, setEmailConsentState] = useState(false);
 
   useEffect(() => {
     let active = true;
     void (async () => {
-      const stored = await getStoredSession();
+      const [stored, email] = await Promise.all([getStoredSession(), getEmailConsent()]);
       if (!active) return;
       setSession(stored);
+      setEmailConsentState(email);
       setLoading(false);
     })();
     return () => {
@@ -70,6 +79,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
       }
     })();
   }, [session, loading]);
+
+  // Mirror email-reading consent into native sync prefs so EmailPoller and the
+  // retry job gate on it even when no JS is running.
+  useEffect(() => {
+    if (loading) return;
+    void (async () => {
+      try {
+        await EmailAccounts.setConsent(emailConsent);
+      } catch {
+        void 0;
+      }
+    })();
+  }, [emailConsent, loading]);
+
+  const setEmailConsent = useCallback(async (enabled: boolean) => {
+    await persistEmailConsent(enabled);
+    try {
+      await EmailAccounts.setConsent(enabled);
+    } catch {
+      void 0;
+    }
+    setEmailConsentState(enabled);
+  }, []);
 
   const signIn = useCallback(async (result: OtpVerifyResponse) => {
     const next: StoredSession = {
@@ -116,12 +148,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
     await clearStoredSession();
     await clearStoredConsent();
     await clearReadingEnabled();
+    await clearEmailConsent();
     try {
       await SmsReader.setConsent(false);
       await SmsReader.stopListening();
+      await EmailAccounts.setConsent(false);
     } catch {
       void 0;
     }
+    setEmailConsentState(false);
     setSession(null);
   }, []);
 
@@ -134,11 +169,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
       session,
       client: session?.client ?? null,
       loading,
+      emailConsent,
+      setEmailConsent,
       signIn,
       signOut,
       revokeConsent,
     }),
-    [session, loading, signIn, signOut, revokeConsent],
+    [session, loading, emailConsent, setEmailConsent, signIn, signOut, revokeConsent],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

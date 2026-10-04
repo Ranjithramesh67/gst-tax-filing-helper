@@ -6,6 +6,7 @@ export const CONSENT_STORAGE_KEY = 'gstflow.mobile.consent';
 export const SMS_QUEUE_STORAGE_KEY = 'gstflow.mobile.smsQueue';
 export const DEVICE_ID_STORAGE_KEY = 'gstflow.mobile.deviceId';
 export const READING_ENABLED_KEY = 'gstflow.mobile.readingEnabled';
+export const EMAIL_CONSENT_STORAGE_KEY = 'gstflow.mobile.emailConsent';
 
 export interface StoredSession {
   accessToken: string;
@@ -112,4 +113,21 @@ export async function setReadingEnabled(enabled: boolean): Promise<void> {
 
 export async function clearReadingEnabled(): Promise<void> {
   await AsyncStorage.removeItem(READING_ENABLED_KEY);
+}
+
+/**
+ * Email-reading consent, separate from SMS consent. Defaults to OFF: email
+ * capture stays disabled until the user explicitly grants it. The flag is
+ * mirrored to the native poller via `EmailAccounts.setConsent`.
+ */
+export async function getEmailConsent(): Promise<boolean> {
+  return (await AsyncStorage.getItem(EMAIL_CONSENT_STORAGE_KEY)) === 'true';
+}
+
+export async function setEmailConsent(enabled: boolean): Promise<void> {
+  await AsyncStorage.setItem(EMAIL_CONSENT_STORAGE_KEY, enabled ? 'true' : 'false');
+}
+
+export async function clearEmailConsent(): Promise<void> {
+  await AsyncStorage.removeItem(EMAIL_CONSENT_STORAGE_KEY);
 }

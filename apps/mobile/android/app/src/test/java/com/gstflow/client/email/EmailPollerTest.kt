@@ -233,4 +233,26 @@ class EmailPollerTest {
 
         assertTrue(cursors.isEmpty())
     }
+
+    @Test
+    fun consentOffSkipsEveryAccountAndUploadsNothing() {
+        val connector = FakeConnector(listOf(mail()), nextCursor = "2026-10-04#9")
+        var factoryCalls = 0
+        val uploaded = mutableListOf<String>()
+
+        val needsRetry = EmailPoller.pollAll(
+            accounts = listOf(account()),
+            connectorFactory = { factoryCalls += 1; connector },
+            sink = sink,
+            upload = { item -> uploaded.add(item.sourceRef); true },
+            onCursor = { _, _ -> },
+            onStatus = { _, _, _ -> },
+            consentGranted = false,
+        )
+
+        assertFalse(needsRetry)
+        assertEquals("consent off must not even build a connector", 0, factoryCalls)
+        assertTrue("consent off must not upload", uploaded.isEmpty())
+        assertEquals("consent off must not queue anything", 0, sink.size())
+    }
 }

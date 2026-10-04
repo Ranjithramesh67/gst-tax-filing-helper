@@ -29,6 +29,14 @@ object EmailPoller {
      * running this off the main thread.
      */
     fun pollAll(context: Context) {
+        // Email reading is off by default. Nothing may be read (or uploaded)
+        // until the user has granted consent, which JS mirrors into sync prefs
+        // via EmailAccountModule.setConsent(true).
+        if (!EmailAccounts.isConsentGranted(context)) {
+            Log.i(TAG, "Email-reading consent not granted; skipping poll")
+            return
+        }
+
         val sink = EmailOtpOutbox.store(context)
         val accounts = try {
             EmailAccounts.list()
@@ -81,9 +89,11 @@ object EmailPoller {
         }
 
     /**
-     * Pure orchestration over a list of accounts. Skipped accounts are disabled
-     * or have no connector (provider not implemented). Returns true when at
-     * least one extracted OTP failed to upload, so the caller should retry.
+     * Pure orchestration over a list of accounts. Skipped accounts are disabled,
+     * have no connector (provider not implemented), or email consent is off
+     * ([consentGranted] = false), in which case nothing is read or uploaded.
+     * Returns true when at least one extracted OTP failed to upload, so the
+     * caller should retry.
      */
     internal fun pollAll(
         accounts: List<EmailAccount>,
@@ -92,7 +102,12 @@ object EmailPoller {
         upload: (EmailOtp) -> Boolean,
         onCursor: (String, String) -> Unit,
         onStatus: (String, Long?, String?) -> Unit,
+        consentGranted: Boolean = true,
     ): Boolean {
+        // The consent gate lives here too so the pure orchestration is testable
+        // without Android: with consent off no account is ever read or uploaded.
+        if (!consentGranted) return false
+
         var needsRetry = false
         for (account in accounts) {
             if (!account.enabled) continue

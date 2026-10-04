@@ -1,6 +1,7 @@
 package com.gstflow.client.email
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -123,5 +124,41 @@ class EmailAccountsTest {
         prefs.putString(EmailAccountStore.KEY_ACCOUNTS, "[${raw}]")
 
         assertEquals(listOf("acc-1"), store.list().map { it.id })
+    }
+
+    @Test
+    fun publicProjectionOmitsSecretsButKeepsMetadata() {
+        store.save(
+            account("acc-1").copy(
+                cursor = "2026-10-04#9",
+                lastPolledAt = 1_700_000_000_000L,
+                lastError = null,
+                oauthTokenJson = "{\"token\":\"secret\"}",
+            ),
+        )
+
+        val json = store.get("acc-1")!!.toPublicJson()
+
+        assertFalse("secretRef must never cross the bridge", json.has("secretRef"))
+        assertFalse("oauthTokenJson must never cross the bridge", json.has("oauthTokenJson"))
+        assertEquals("acc-1", json.getString("id"))
+        assertEquals("IMAP", json.getString("provider"))
+        assertEquals("user@example.com", json.getString("address"))
+        assertEquals("imap.example.com", json.getString("imapHost"))
+        assertEquals(993, json.getInt("imapPort"))
+        assertEquals("2026-10-04#9", json.getString("cursor"))
+        assertEquals(true, json.getBoolean("enabled"))
+        assertEquals(1_700_000_000_000L, json.getLong("lastPolledAt"))
+    }
+
+    @Test
+    fun setEnabledTogglesTheFlag() {
+        store.save(account())
+
+        store.setEnabled("acc-1", false)
+        assertEquals(false, store.get("acc-1")?.enabled)
+
+        store.setEnabled("acc-1", true)
+        assertEquals(true, store.get("acc-1")?.enabled)
     }
 }

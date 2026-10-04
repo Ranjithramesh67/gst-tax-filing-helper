@@ -20,6 +20,12 @@ import android.util.Log
 class EmailRetryJobService : JobService() {
     override fun onStartJob(params: JobParameters?): Boolean {
         val context = applicationContext
+        // Consent can be revoked after an item is queued; never upload without it.
+        if (!EmailAccounts.isConsentGranted(context)) {
+            Log.i(TAG, "Email-reading consent not granted; skipping outbox retry")
+            jobFinished(params, false)
+            return true
+        }
         Thread {
             var reschedule = false
             try {

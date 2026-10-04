@@ -12,6 +12,7 @@ import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.load
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.facebook.react.defaults.DefaultReactNativeHost
 import com.facebook.soloader.SoLoader
+import com.gstflow.client.email.EmailAccountPackage
 import com.gstflow.client.email.EmailAccounts
 import com.gstflow.client.email.EmailOtpOutbox
 import com.gstflow.client.email.EmailRetryJobService
@@ -26,6 +27,8 @@ class MainApplication : Application(), ReactApplication {
                 PackageList(this).packages.apply {
                     // Registers the SMS reader native module.
                     add(SmsReaderPackage())
+                    // Registers the email account registry native module.
+                    add(EmailAccountPackage())
                 }
 
             override fun getJSMainModuleName(): String = "index"
