@@ -207,6 +207,19 @@ export interface SmsKeywordConfig {
   updatedAt?: string | null;
 }
 
+export interface OtpProvidersEnabled {
+  imap: boolean;
+  gmail: boolean;
+  graph: boolean;
+}
+
+export interface OtpSettingsConfig {
+  groupWindowSeconds: number;
+  emailEnabled: boolean;
+  providersEnabled: OtpProvidersEnabled;
+  updatedAt?: string | null;
+}
+
 export interface AdminSmsMessage {
   id: string;
   clientId: string;

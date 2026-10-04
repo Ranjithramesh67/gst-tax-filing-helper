@@ -32,6 +32,7 @@ import type {
   SmsMessage,
   SmsProviderConfig,
   SmsRetentionPolicy,
+  OtpProvidersEnabled,
   OtpSource,
   Subscription,
   User,
@@ -391,6 +392,12 @@ export interface UpdateSmsKeywordBody {
 }
 
 export type PublicSmsKeywordConfig = SmsKeywordConfig;
+
+export interface UpdateOtpSettingsBody {
+  groupWindowSeconds: number;
+  emailEnabled: boolean;
+  providersEnabled: OtpProvidersEnabled;
+}
 
 export interface CreateGstReturnBody {
   clientId: string;

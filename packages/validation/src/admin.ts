@@ -171,3 +171,17 @@ export const smsKeywordSchema = z.object({
   headerKeywords: z.array(keywordItemSchema).max(100),
   hideAfterForward: z.boolean(),
 });
+
+export const otpProvidersEnabledSchema = z
+  .object({
+    imap: z.boolean(),
+    gmail: z.boolean(),
+    graph: z.boolean(),
+  })
+  .strict();
+
+export const otpSettingsSchema = z.object({
+  groupWindowSeconds: z.coerce.number().int().min(30).max(3600),
+  emailEnabled: z.boolean(),
+  providersEnabled: otpProvidersEnabledSchema,
+});
