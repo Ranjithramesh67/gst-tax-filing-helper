@@ -45,6 +45,7 @@ import type {
   MarkPaymentRequestPaidBody,
   OtpRequestBody,
   OtpRequestResponse,
+  OtpSettingsConfig,
   OtpVerifyBody,
   OtpVerifyResponse,
   PaginatedAdminSms,
@@ -92,6 +93,7 @@ import type {
   UpdateFilingStatusBody,
   UpdateFirmBody,
   UpdateFirmSettingsBody,
+  UpdateOtpSettingsBody,
   UpdatePaymentBody,
   UpdateRoleBody,
   UpdateSmsKeywordBody,
@@ -361,6 +363,11 @@ export class GstFlowApi {
         get: () => this.http.get<SmsKeywordConfig>('/admin/settings/sms-keywords'),
         update: (body: UpdateSmsKeywordBody) =>
           this.http.put<SmsKeywordConfig>('/admin/settings/sms-keywords', body),
+      },
+      otp: {
+        get: () => this.http.get<OtpSettingsConfig>('/admin/settings/otp'),
+        update: (body: UpdateOtpSettingsBody) =>
+          this.http.put<OtpSettingsConfig>('/admin/settings/otp', body),
       },
     },
     audit: {
