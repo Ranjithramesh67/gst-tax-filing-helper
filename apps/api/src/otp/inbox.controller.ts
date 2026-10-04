@@ -1,6 +1,6 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { Role } from '@gstflow/types';
-import type { PaginatedInbox } from '@gstflow/types';
+import type { InboxGroupDetail, PaginatedInbox } from '@gstflow/types';
 
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -19,5 +19,14 @@ export class InboxController {
     @Query() query: InboxListQueryDto,
   ): Promise<PaginatedInbox> {
     return this.otp.listFeed(actor, query);
+  }
+
+  @Get(':id')
+  @Roles(Role.CLIENT)
+  async group(
+    @CurrentUser() actor: Actor,
+    @Param('id') id: string,
+  ): Promise<InboxGroupDetail> {
+    return this.otp.getGroup(actor, id);
   }
 }

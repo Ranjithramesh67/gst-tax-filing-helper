@@ -220,4 +220,57 @@ describe('Unified inbox feed (e2e)', () => {
     await request(app.getHttpServer()).get('/v1/inbox').expect(401);
     await request(app.getHttpServer()).get('/v1/inbox').set(auth(firmToken)).expect(403);
   });
+
+  it('returns code-masked per-event detail for an OTP group', async () => {
+    const code = '5599';
+    await ingestSms(code);
+    await ingestEmail(code, new Date(Date.now() + 1000).toISOString());
+
+    const list = await fetchInbox();
+    const item = list.body.items.find(
+      (entry: { kind: string; code?: string }) => entry.kind === 'OTP' && entry.code === code,
+    );
+    expect(item).toBeDefined();
+
+    const detail = await request(app.getHttpServer())
+      .get(`/v1/inbox/${item.id}`)
+      .set(auth(clientToken))
+      .expect(200);
+    expect(detail.body.id).toBe(item.id);
+    expect(detail.body.code).toBe(code);
+    expect(detail.body.client.id).toBe(clientId);
+    expect(detail.body.events).toHaveLength(2);
+    expect(detail.body.events.map((event: { source: string }) => event.source).sort()).toEqual([
+      'EMAIL',
+      'SMS',
+    ]);
+    for (const event of detail.body.events) {
+      expect(event.snippet ?? '').not.toContain(code);
+    }
+  });
+
+  it('isolates OTP detail by tenant and hides unknown groups', async () => {
+    const code = '6688';
+    await ingestSms(code);
+    const list = await fetchInbox();
+    const item = list.body.items.find(
+      (entry: { kind: string; code?: string }) => entry.kind === 'OTP' && entry.code === code,
+    );
+    expect(item).toBeDefined();
+
+    await request(app.getHttpServer())
+      .get(`/v1/inbox/${item.id}`)
+      .set(auth(secondClientToken))
+      .expect(404);
+
+    await request(app.getHttpServer()).get('/v1/inbox/does-not-exist').expect(401);
+    await request(app.getHttpServer())
+      .get('/v1/inbox/does-not-exist')
+      .set(auth(firmToken))
+      .expect(403);
+    await request(app.getHttpServer())
+      .get('/v1/inbox/does-not-exist')
+      .set(auth(clientToken))
+      .expect(404);
+  });
 });

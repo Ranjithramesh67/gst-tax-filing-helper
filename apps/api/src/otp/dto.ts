@@ -7,6 +7,7 @@ export type OtpIngestResult = OtpIngestResponse;
 export interface InboxListQueryDto {
   clientId?: string;
   category?: string;
+  status?: string;
   search?: string;
   from?: string;
   to?: string;

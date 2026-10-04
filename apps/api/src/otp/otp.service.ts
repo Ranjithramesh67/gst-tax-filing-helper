@@ -1,8 +1,10 @@
-import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Role } from '@gstflow/types';
 import type {
+  InboxGroupDetail,
   InboxItem,
+  InboxOtpEvent,
   OtpIngestItem,
   OtpIngestResponse,
   OtpSource,
@@ -376,6 +378,7 @@ export class OtpService {
     const otpWhere: Prisma.OtpEventWhereInput = { firmId, clientId };
     const smsWhere: Prisma.SmsMessageWhereInput = { clientId };
     if (query.category) smsWhere.category = query.category as SmsMessage['category'];
+    if (query.status) smsWhere.status = query.status as SmsMessage['status'];
     if (query.search) {
       otpWhere.OR = [
         { code: { contains: query.search, mode: 'insensitive' } },
@@ -426,6 +429,45 @@ export class OtpService {
     const items = entries.slice(slice.skip, slice.skip + slice.pageSize).map((entry) => entry.item);
 
     return paginate(items, entries.length, slice);
+  }
+
+  /**
+   * Detail for a single OTP group: every underlying SMS/EMAIL event, oldest
+   * first. Scoped strictly to the authenticated client's firm+client, so an id
+   * from another tenant resolves to 404 rather than leaking anything. Snippets
+   * are decrypted then code-masked, matching the feed's privacy contract.
+   */
+  async getGroup(actor: Actor, id: string): Promise<InboxGroupDetail> {
+    const clientId = actor.clientId;
+    if (actor.role !== Role.CLIENT || !clientId) {
+      throw new ForbiddenException('No client is associated with this account');
+    }
+
+    const firmId = actor.firmId ?? '__no_firm__';
+    const rows = await this.prisma.otpEvent.findMany({
+      where: { firmId, clientId, OR: [{ id }, { groupId: id }] },
+      orderBy: { receivedAt: 'asc' },
+    });
+    if (rows.length === 0) {
+      throw new NotFoundException('OTP group not found');
+    }
+
+    const client = await this.prisma.client.findUnique({
+      where: { id: clientId },
+      select: { id: true, name: true },
+    });
+
+    const code = rows[0].code;
+    const events: InboxOtpEvent[] = rows.map((row) => ({
+      id: row.id,
+      source: row.source as OtpSource,
+      from: row.fromAddress,
+      subject: row.subject,
+      snippet: row.snippet == null ? null : maskCode(this.decryptSnippet(row.snippet) ?? '', code),
+      receivedAt: row.receivedAt.toISOString(),
+    }));
+
+    return { id, code, client: client ?? { id: clientId, name: '' }, events };
   }
 
   private serialiseInboxSms(row: InboxSmsRow): InboxItem {

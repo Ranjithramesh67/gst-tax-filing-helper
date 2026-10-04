@@ -642,6 +642,18 @@ describe('OtpService.listFeed', () => {
     expect(otpArg.where).not.toHaveProperty('category');
   });
 
+  it('applies status to raw SMS only', async () => {
+    const prisma = buildFeedPrisma();
+    const service = new OtpService(prisma, buildCrypto());
+
+    await service.listFeed(feedActor, { status: 'REVIEWED' });
+
+    const smsArg = (prisma.smsMessage.findMany as jest.Mock).mock.calls[0][0];
+    expect(smsArg.where).toMatchObject({ clientId: 'client-1', status: 'REVIEWED' });
+    const otpArg = (prisma.otpEvent.findMany as jest.Mock).mock.calls[0][0];
+    expect(otpArg.where).not.toHaveProperty('status');
+  });
+
   it('paginates in memory and reports the over-fetched total', async () => {
     const prisma = buildFeedPrisma();
     const rows = Array.from({ length: 30 }, (_, index) =>
@@ -672,6 +684,86 @@ describe('OtpService.listFeed', () => {
     const staff = { ...feedActor, role: 'FILER', clientId: null } as unknown as Actor;
 
     await expect(service.listFeed(staff, {})).rejects.toThrow();
+    expect(prisma.otpEvent.findMany).not.toHaveBeenCalled();
+  });
+});
+
+function buildGroupPrisma() {
+  const prisma = {
+    otpEvent: { findMany: jest.fn().mockResolvedValue([]) },
+    client: {
+      findUnique: jest.fn().mockResolvedValue({ id: 'client-1', name: 'Acme Traders' }),
+    },
+  };
+  return prisma as unknown as PrismaService & { [key: string]: any };
+}
+
+describe('OtpService.getGroup', () => {
+  it('returns the group events oldest-first with code-masked snippets', async () => {
+    const prisma = buildGroupPrisma();
+    (prisma.otpEvent.findMany as jest.Mock).mockResolvedValue([
+      otpRow({
+        id: 'otp-sms',
+        groupId: 'group-1',
+        source: 'SMS',
+        snippet: 'enc:Your OTP is 4831 now',
+        receivedAt: new Date('2026-10-04T10:00:00.000Z'),
+      }),
+      otpRow({
+        id: 'otp-email',
+        groupId: 'group-1',
+        source: 'EMAIL',
+        fromAddress: 'noreply@bank.example',
+        subject: 'Your one-time password',
+        snippet: 'enc:Your OTP is 4831',
+        receivedAt: new Date('2026-10-04T10:00:30.000Z'),
+      }),
+    ]);
+    const service = new OtpService(prisma, buildCrypto());
+
+    const detail = await service.getGroup(feedActor, 'group-1');
+
+    expect(detail).toMatchObject({
+      id: 'group-1',
+      code: '4831',
+      client: { id: 'client-1', name: 'Acme Traders' },
+    });
+    expect(detail.events.map((event) => event.source)).toEqual(['SMS', 'EMAIL']);
+    expect(detail.events[0].snippet).not.toContain('4831');
+    expect(detail.events[1].snippet).not.toContain('4831');
+    expect(detail.events[1]).toMatchObject({ from: 'noreply@bank.example' });
+  });
+
+  it('scopes the lookup to the actor firm and client', async () => {
+    const prisma = buildGroupPrisma();
+    (prisma.otpEvent.findMany as jest.Mock).mockResolvedValue([otpRow()]);
+    const service = new OtpService(prisma, buildCrypto());
+
+    await service.getGroup(feedActor, 'group-1');
+
+    expect(prisma.otpEvent.findMany).toHaveBeenCalledWith({
+      where: {
+        firmId: 'firm-1',
+        clientId: 'client-1',
+        OR: [{ id: 'group-1' }, { groupId: 'group-1' }],
+      },
+      orderBy: { receivedAt: 'asc' },
+    });
+  });
+
+  it('throws NotFound when the group is not visible to the actor', async () => {
+    const prisma = buildGroupPrisma();
+    const service = new OtpService(prisma, buildCrypto());
+
+    await expect(service.getGroup(feedActor, 'group-x')).rejects.toThrow();
+  });
+
+  it('refuses a non-CLIENT actor', async () => {
+    const prisma = buildGroupPrisma();
+    const service = new OtpService(prisma, buildCrypto());
+    const staff = { ...feedActor, role: 'FILER', clientId: null } as unknown as Actor;
+
+    await expect(service.getGroup(staff, 'group-1')).rejects.toThrow();
     expect(prisma.otpEvent.findMany).not.toHaveBeenCalled();
   });
 });
