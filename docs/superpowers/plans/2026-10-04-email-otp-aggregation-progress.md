@@ -34,7 +34,7 @@ Execution mode: subagent-driven-development
 | 10 | Encrypted account store + registry | done (review clean) | `23be95a` |
 | 11 | `EmailConnector` interface + IMAP | done (review clean after fixes) | `24f5ccf`, `e98f68c`, `88f570f` |
 | 12 | Poller + outbox + retry job | done (review clean) | `2c0b881` |
-| 13 | RN bridge + JS wrapper + consent | pending | - |
+| 13 | RN bridge + JS wrapper + consent | done (review clean after hardening) | `5a8260c`, `54d1b5d`, `67f4412` |
 | 14 | Mobile email settings screen | pending | - |
 | 15 | Gmail connector | pending | - |
 | 16 | Microsoft Graph connector | pending | - |
@@ -63,10 +63,9 @@ Execution mode: subagent-driven-development
   unrestricted. `query.clientId` can never widen scope; cross-firm -> empty/404.
   `POST /otp/ingest` remains CLIENT-only. Do not re-introduce the CLIENT-only guard
   (it broke the firm web dashboard).
-- **Carry-forward into Task 13 (required):** `EmailPoller.pollAll` has NO consent
-  gate yet (safe today because nothing links an account). Task 13 MUST gate
-  polling/upload on the email-reading consent BEFORE any account-linking UI can
-  exist, so a half-landed link feature cannot read/upload mail.
+- **Task 13 consent (done):** `EmailPoller.pollAll` and `EmailRetryJobService` now
+  gate on native consent (default OFF), and the pure overload requires
+  `consentGranted` explicitly (fail-closed). Linking UI must not bypass this.
 - **Carry-forward into Task 19 (product check):** email poll cadence currently
   fires only off the SMS foreground-service tick (15-min throttle); with no inbound
   SMS there is no email poll. Verify whether a periodic `JobScheduler`/Alarm tick is
