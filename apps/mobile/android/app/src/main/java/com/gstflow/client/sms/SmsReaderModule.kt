@@ -95,6 +95,11 @@ object SmsBuffer {
  *  - setConsent(enabled): Promise<boolean>  (mirrors consent to native cache)
  *  - flushPending(): Promise<number>
  *  - clearNotification(): Promise<boolean>  (removes the transient ingest notification)
+ *  - isIgnoringBatteryOptimizations(): Promise<boolean>
+ *  - requestIgnoreBatteryOptimizations(): Promise<boolean>
+ *  - openBatteryOptimizationSettings(): Promise<boolean>
+ *  - openAutoStartSettings(): Promise<boolean>
+ *  - getDeviceManufacturer(): Promise<string>
  *  - event: onSmsReceived -> {sender, body, receivedAt, receivedAtIso, hash}
  */
 class SmsReaderModule(private val reactContext: ReactApplicationContext) :
@@ -149,6 +154,48 @@ class SmsReaderModule(private val reactContext: ReactApplicationContext) :
     @ReactMethod
     fun hasSmsPermission(promise: Promise) {
         promise.resolve(SmsPermissions.hasSmsPermission(reactContext))
+    }
+
+    @ReactMethod
+    fun isIgnoringBatteryOptimizations(promise: Promise) {
+        promise.resolve(BatteryOptimization.isIgnoringOptimizations(reactContext))
+    }
+
+    @ReactMethod
+    fun getDeviceManufacturer(promise: Promise) {
+        promise.resolve(BatteryOptimization.manufacturer())
+    }
+
+    /**
+     * Launches the system "ignore battery optimizations" dialog and resolves
+     * once it has been shown. The caller should re-check
+     * `isIgnoringBatteryOptimizations` when the app returns to the foreground.
+     */
+    @ReactMethod
+    fun requestIgnoreBatteryOptimizations(promise: Promise) {
+        try {
+            promise.resolve(BatteryOptimization.requestExemption(reactContext))
+        } catch (error: Exception) {
+            promise.reject("BATTERY_REQUEST_FAILED", error.message, error)
+        }
+    }
+
+    @ReactMethod
+    fun openBatteryOptimizationSettings(promise: Promise) {
+        try {
+            promise.resolve(BatteryOptimization.openOptimizationSettings(reactContext))
+        } catch (error: Exception) {
+            promise.reject("BATTERY_SETTINGS_FAILED", error.message, error)
+        }
+    }
+
+    @ReactMethod
+    fun openAutoStartSettings(promise: Promise) {
+        try {
+            promise.resolve(BatteryOptimization.openAutoStartSettings(reactContext))
+        } catch (error: Exception) {
+            promise.reject("AUTOSTART_SETTINGS_FAILED", error.message, error)
+        }
     }
 
     @ReactMethod

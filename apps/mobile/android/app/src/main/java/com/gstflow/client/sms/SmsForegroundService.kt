@@ -10,6 +10,8 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.gstflow.client.MainActivity
 import java.util.concurrent.ExecutorService
@@ -30,6 +32,10 @@ class SmsForegroundService : Service() {
     // finish so the process is not killed mid-request.
     private val uploadExecutor: ExecutorService = Executors.newSingleThreadExecutor()
 
+    // Held only while an upload is in flight so a sleeping device still completes
+    // the request and forwards the OTP/SMS.
+    private var wakeLock: PowerManager.WakeLock? = null
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -38,6 +44,7 @@ class SmsForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        releaseWakeLock()
         uploadExecutor.shutdown()
         super.onDestroy()
     }
@@ -65,10 +72,12 @@ class SmsForegroundService : Service() {
                     // JS running: upload directly from native so an SMS received
                     // while the app is closed still reaches the backend.
                     SmsReaderModule.dispatch(this, sms)
+                    acquireWakeLock()
                     uploadExecutor.execute {
                         try {
                             SmsUploader.upload(applicationContext, sms)
                         } finally {
+                            releaseWakeLock()
                             stopForegroundCompat()
                             stopSelf(startId)
                         }
@@ -103,6 +112,33 @@ class SmsForegroundService : Service() {
         } else {
             stopForeground(true)
         }
+    }
+
+    /**
+     * Holds a short-lived partial wake lock so the ingest upload completes even
+     * if the device tries to sleep (e.g. power saver + screen off). Released as
+     * soon as the request finishes; auto-released by the system after 60s.
+     */
+    private fun acquireWakeLock() {
+        if (wakeLock?.isHeld == true) return
+        val power = getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return
+        wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "gstflow:sms-upload").apply {
+            setReferenceCounted(false)
+            try {
+                acquire(WAKE_LOCK_TIMEOUT_MS)
+            } catch (error: Exception) {
+                Log.w(TAG, "Unable to acquire wake lock: ${error.message}")
+            }
+        }
+    }
+
+    private fun releaseWakeLock() {
+        try {
+            wakeLock?.takeIf { it.isHeld }?.release()
+        } catch (error: Exception) {
+            Log.w(TAG, "Unable to release wake lock: ${error.message}")
+        }
+        wakeLock = null
     }
 
     private fun buildNotification(text: String): Notification {
@@ -156,6 +192,8 @@ class SmsForegroundService : Service() {
 
         private const val CHANNEL_ID = "gstflow_sms_sync"
         private const val NOTIFICATION_ID = 7301
+        private const val TAG = "SmsForegroundService"
+        private const val WAKE_LOCK_TIMEOUT_MS = 60_000L
 
         /** Removes the transient ingest notification if it is still showing. */
         fun clearNotification(context: Context) {

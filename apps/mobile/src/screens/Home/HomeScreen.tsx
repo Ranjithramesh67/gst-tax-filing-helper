@@ -21,6 +21,13 @@ import {
   type StoredConsent,
 } from '@/lib/storage';
 import { size as queueSize, subscribe as subscribeQueue } from '@/lib/smsQueue';
+import {
+  getBatteryStatus,
+  onAppForeground,
+  openAutoStartSettings,
+  requestBatteryExemption,
+  type BatteryStatus,
+} from '@/lib/battery';
 import { isAutoSyncActive, LAST_SYNC_STORAGE_KEY, subscribeSync, syncNow } from '@/lib/smsSync';
 import { SmsReader } from '@/native/SmsReader';
 import type { RootStackParamList } from '@/navigation/RootNavigator';
@@ -67,6 +74,8 @@ export function HomeScreen(): React.ReactElement {
   const [consent, setConsent] = useState<StoredConsent | null>(null);
   const [hasPermission, setHasPermission] = useState(false);
   const [listening, setListening] = useState(true);
+  const [battery, setBattery] = useState<BatteryStatus | null>(null);
+  const [batteryBusy, setBatteryBusy] = useState(false);
   const [queued, setQueued] = useState(0);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [links, setLinks] = useState<ClientLink[]>([]);
@@ -77,20 +86,23 @@ export function HomeScreen(): React.ReactElement {
   const [notice, setNotice] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const [storedConsent, permission, count, lastSync, readingEnabled, linkRows] = await Promise.all([
-      getStoredConsent(),
-      SmsReader.hasSmsPermission(),
-      queueSize(),
-      AsyncStorage.getItem(LAST_SYNC_STORAGE_KEY),
-      getReadingEnabled(),
-      api.links.list().catch(() => [] as ClientLink[]),
-    ]);
+    const [storedConsent, permission, count, lastSync, readingEnabled, linkRows, batteryStatus] =
+      await Promise.all([
+        getStoredConsent(),
+        SmsReader.hasSmsPermission(),
+        queueSize(),
+        AsyncStorage.getItem(LAST_SYNC_STORAGE_KEY),
+        getReadingEnabled(),
+        api.links.list().catch(() => [] as ClientLink[]),
+        getBatteryStatus().catch(() => null),
+      ]);
     setConsent(storedConsent);
     setHasPermission(permission);
     setQueued(count);
     setLastSyncAt(lastSync);
     setListening(readingEnabled);
     setLinks(linkRows);
+    if (batteryStatus) setBattery(batteryStatus);
   }, []);
 
   useEffect(() => {
@@ -138,6 +150,50 @@ export function HomeScreen(): React.ReactElement {
       unsubscribeQueue();
       unsubscribeSync();
     };
+  }, []);
+
+  // Re-check battery exemption when returning from the system dialog/settings.
+  useEffect(() => {
+    return onAppForeground(() => {
+      void getBatteryStatus()
+        .then(setBattery)
+        .catch(() => undefined);
+    });
+  }, []);
+
+  const onAllowBackground = useCallback(async () => {
+    setBatteryBusy(true);
+    setNotice(null);
+    try {
+      const launched = await requestBatteryExemption();
+      const status = await getBatteryStatus();
+      setBattery(status);
+      if (status.ignoring) {
+        setNotice('Background access is allowed.');
+      } else {
+        setNotice(
+          launched
+            ? 'In the screen that just opened, choose Allow so GSTFlow can keep forwarding while the screen is off.'
+            : 'Could not open battery settings automatically. Open Settings > Battery > Unrestricted for GSTFlow.',
+        );
+      }
+    } catch (error) {
+      setNotice(messageOf(error));
+    } finally {
+      setBatteryBusy(false);
+    }
+  }, []);
+
+  const onOpenAutoStart = useCallback(async () => {
+    setNotice(null);
+    try {
+      const opened = await openAutoStartSettings();
+      if (!opened) {
+        setNotice('Autostart settings are not available on this device.');
+      }
+    } catch (error) {
+      setNotice(messageOf(error));
+    }
   }, []);
 
   const onGrantPermission = useCallback(async () => {
@@ -352,6 +408,57 @@ export function HomeScreen(): React.ReactElement {
             thumbColor={colors.surface}
           />
         </View>
+      </Card>
+
+      <Card title="Background reliability">
+        <InfoRow
+          label="Battery restriction"
+          value={
+            <Text
+              style={[
+                styles.infoValue,
+                battery?.ignoring ? styles.valueSuccess : styles.valueDanger,
+              ]}
+            >
+              {battery ? (battery.ignoring ? 'Unrestricted' : 'Restricted') : '—'}
+            </Text>
+          }
+        />
+        <Text style={styles.helper}>
+          If Android restricts background work, GST messages and OTPs can be delayed. Allow GSTFlow
+          to run in the background so forwarding keeps working with the screen off or power saver
+          on.
+        </Text>
+        {!battery?.ignoring ? (
+          <Pressable
+            accessibilityRole="button"
+            disabled={batteryBusy}
+            onPress={onAllowBackground}
+            style={({ pressed }) => [
+              styles.primaryButton,
+              pressed && styles.primaryButtonPressed,
+              batteryBusy && styles.buttonDisabled,
+            ]}
+          >
+            {batteryBusy ? (
+              <ActivityIndicator color={colors.surface} />
+            ) : (
+              <Text style={styles.primaryButtonText}>Allow background access</Text>
+            )}
+          </Pressable>
+        ) : null}
+        {battery?.aggressiveOem ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={onOpenAutoStart}
+            style={({ pressed }) => [
+              styles.secondaryButton,
+              pressed && styles.secondaryButtonPressed,
+            ]}
+          >
+            <Text style={styles.secondaryButtonText}>Open autostart settings</Text>
+          </Pressable>
+        ) : null}
       </Card>
 
       <Card title="Sync">

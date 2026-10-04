@@ -32,6 +32,11 @@ interface SmsReaderNativeModule {
   flushPending(): Promise<number>;
   clearNotification(): Promise<boolean>;
   setSyncCredentials(accessToken: string | null, deviceId: string | null): Promise<boolean>;
+  isIgnoringBatteryOptimizations(): Promise<boolean>;
+  getDeviceManufacturer(): Promise<string>;
+  requestIgnoreBatteryOptimizations(): Promise<boolean>;
+  openBatteryOptimizationSettings(): Promise<boolean>;
+  openAutoStartSettings(): Promise<boolean>;
   addListener?(eventName: string): void;
   removeListeners?(count: number): void;
 }
@@ -100,6 +105,33 @@ export const SmsReader = {
    */
   setSyncCredentials(accessToken: string | null, deviceId: string | null = null): Promise<boolean> {
     return nativeModule ? nativeModule.setSyncCredentials(accessToken, deviceId) : Promise.resolve(false);
+  },
+
+  /**
+   * True when Android will not defer this app's background work (battery
+   * optimization exempt). Resolves true on non-Android so callers can treat it
+   * as "nothing to fix".
+   */
+  isIgnoringBatteryOptimizations(): Promise<boolean> {
+    return nativeModule ? nativeModule.isIgnoringBatteryOptimizations() : Promise.resolve(true);
+  },
+
+  getDeviceManufacturer(): Promise<string> {
+    return nativeModule ? nativeModule.getDeviceManufacturer() : Promise.resolve('');
+  },
+
+  /** Opens the system dialog asking the user to exempt the app from battery saver. */
+  requestIgnoreBatteryOptimizations(): Promise<boolean> {
+    return nativeModule ? nativeModule.requestIgnoreBatteryOptimizations() : Promise.resolve(false);
+  },
+
+  openBatteryOptimizationSettings(): Promise<boolean> {
+    return nativeModule ? nativeModule.openBatteryOptimizationSettings() : Promise.resolve(false);
+  },
+
+  /** Opens the OEM autostart/protected-apps screen where available. */
+  openAutoStartSettings(): Promise<boolean> {
+    return nativeModule ? nativeModule.openAutoStartSettings() : Promise.resolve(false);
   },
 
   /** Subscribe to incoming GST SMS. Returns an unsubscribe function. */

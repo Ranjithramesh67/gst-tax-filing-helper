@@ -43,7 +43,7 @@ physical device or a deployed backend.
 ## Consent and OTP flow
 
 1. `ConsentScreen` shows the versioned consent text (`CONSENT_VERSION`,
-   currently `2026-09-30`). Nothing is collected until the user taps accept.
+   currently `2026-10-04`). Nothing is collected until the user taps accept.
 2. `OtpScreen` requests an OTP for `CLIENT_ONBOARDING`, then verifies it together
    with a stable, per-install `androidId` and the device info. In development the
    API returns `devCode`, which is displayed on screen.
@@ -60,6 +60,25 @@ service. At runtime the app must request and be granted `READ_SMS` /
 permission. If the permission is denied, the app runs normally but cannot
 collect messages. The consent gate must be accepted before any permission prompt
 or collection begins.
+
+## Battery saver and background reliability
+
+Android defers background work for apps that are not battery-optimization
+exempt, which can delay or drop forwarding of a captured GST SMS / OTP when the
+screen is off or power saver is on. The app handles this in three layers:
+
+1. **Exemption prompt** - the Home and Settings screens show a "Background
+   reliability" card with the current state and an *Allow background access*
+   button that opens the system dialog
+   (`ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`,
+   `SmsReader.requestIgnoreBatteryOptimizations`).
+2. **OEM autostart** - on manufacturers that kill background apps aggressively
+   (Xiaomi, Oppo, Vivo, Huawei, ...), an *Open autostart settings* button opens
+   the device's protected-apps screen (`SmsReader.openAutoStartSettings`).
+3. **Wake lock** - `SmsForegroundService` holds a short-lived partial wake lock
+   while uploading so the ingest request completes even if the device sleeps.
+
+The status re-checks whenever the app returns to the foreground.
 
 ## iOS
 

@@ -10,6 +10,13 @@ import {
 } from 'react-native';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import {
+  getBatteryStatus,
+  onAppForeground,
+  openAutoStartSettings,
+  requestBatteryExemption,
+  type BatteryStatus,
+} from '@/lib/battery';
 import { getStoredConsent, getStoredDeviceId, type StoredConsent } from '@/lib/storage';
 import { SmsReader } from '@/native/SmsReader';
 import { colors, fontSize, radius, spacing } from '@/theme';
@@ -36,6 +43,8 @@ export function SettingsScreen(): React.ReactElement {
   const { client, signOut, revokeConsent } = useAuth();
   const [consent, setConsent] = useState<StoredConsent | null>(null);
   const [deviceId, setDeviceId] = useState<string | null>(null);
+  const [battery, setBattery] = useState<BatteryStatus | null>(null);
+  const [batteryBusy, setBatteryBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [revoking, setRevoking] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -43,18 +52,56 @@ export function SettingsScreen(): React.ReactElement {
   useEffect(() => {
     let active = true;
     void (async () => {
-      const [storedConsent, storedDeviceId] = await Promise.all([
+      const [storedConsent, storedDeviceId, batteryStatus] = await Promise.all([
         getStoredConsent(),
         getStoredDeviceId(),
+        getBatteryStatus().catch(() => null),
       ]);
       if (!active) return;
       setConsent(storedConsent);
       setDeviceId(storedDeviceId);
+      if (batteryStatus) setBattery(batteryStatus);
       setLoading(false);
     })();
     return () => {
       active = false;
     };
+  }, []);
+
+  useEffect(() => {
+    return onAppForeground(() => {
+      void getBatteryStatus()
+        .then(setBattery)
+        .catch(() => undefined);
+    });
+  }, []);
+
+  const onAllowBackground = useCallback(async () => {
+    setBatteryBusy(true);
+    try {
+      const launched = await requestBatteryExemption();
+      const status = await getBatteryStatus();
+      setBattery(status);
+      if (status.ignoring) {
+        Alert.alert('Background access allowed', 'GSTFlow can now keep forwarding with the screen off.');
+      } else {
+        Alert.alert(
+          'Allow background access',
+          launched
+            ? 'In the screen that just opened, choose Allow so GSTFlow can keep forwarding GST messages and OTPs while the screen is off.'
+            : 'Open Settings > Battery > Unrestricted for GSTFlow to allow background access.',
+        );
+      }
+    } finally {
+      setBatteryBusy(false);
+    }
+  }, []);
+
+  const onOpenAutoStart = useCallback(async () => {
+    const opened = await openAutoStartSettings();
+    if (!opened) {
+      Alert.alert('Not available', 'Autostart settings are not available on this device.');
+    }
   }, []);
 
   const runRevoke = useCallback(async () => {
@@ -146,6 +193,49 @@ export function SettingsScreen(): React.ReactElement {
           value={consent ? formatDateTime(consent.acceptedAt) : 'Not recorded'}
         />
         <InfoRow label="OTP verified" value={consent?.otpVerified ? 'Yes' : 'No'} />
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Background reliability</Text>
+        <InfoRow
+          label="Battery restriction"
+          value={battery ? (battery.ignoring ? 'Unrestricted' : 'Restricted') : '—'}
+        />
+        <Text style={styles.body}>
+          Android can delay or pause background work when battery saver is on, which may hold up
+          forwarding of GST messages and OTPs. Allow GSTFlow to run unrestricted so captured
+          messages reach your firm even with the screen off.
+        </Text>
+        {!battery?.ignoring ? (
+          <Pressable
+            accessibilityRole="button"
+            disabled={batteryBusy}
+            onPress={onAllowBackground}
+            style={({ pressed }) => [
+              styles.primaryButton,
+              pressed && styles.primaryButtonPressed,
+              batteryBusy && styles.buttonDisabled,
+            ]}
+          >
+            {batteryBusy ? (
+              <ActivityIndicator color={colors.surface} />
+            ) : (
+              <Text style={styles.primaryButtonText}>Allow background access</Text>
+            )}
+          </Pressable>
+        ) : null}
+        {battery?.aggressiveOem ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={onOpenAutoStart}
+            style={({ pressed }) => [
+              styles.secondaryButton,
+              pressed && styles.secondaryButtonPressed,
+            ]}
+          >
+            <Text style={styles.secondaryButtonText}>Open autostart settings</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <View style={styles.card}>
@@ -273,6 +363,21 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     color: colors.primary,
+    fontSize: fontSize.md,
+    fontWeight: '600',
+  },
+  primaryButton: {
+    marginBottom: spacing.sm,
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+  },
+  primaryButtonPressed: {
+    backgroundColor: colors.primaryPressed,
+  },
+  primaryButtonText: {
+    color: colors.surface,
     fontSize: fontSize.md,
     fontWeight: '600',
   },
