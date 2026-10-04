@@ -125,8 +125,14 @@ dependencies {
     // Encrypted storage for linked email accounts/tokens (AES256 master key).
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
+    // JavaMail for IMAP transport in the email OTP connector (javax.mail API).
+    implementation("com.sun.mail:android-mail:1.6.7")
+    implementation("com.sun.mail:android-activation:1.6.7")
+
     // JVM unit tests for pure-Kotlin logic (e.g. OtpExtractor). The real org.json
     // artifact shadows the stubbed android.jar so fixtures can be parsed locally.
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
+    // Mocks the abstract javax.mail Folder/Message for ImapConnectorTest (no network).
+    testImplementation("org.mockito:mockito-core:5.14.2")
 }
