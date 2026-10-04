@@ -100,3 +100,55 @@ export const createReleaseSchema = z.object({
   changelog: z.string().max(4000).optional(),
   mandatory: z.boolean().optional(),
 });
+
+const smsProviderKindSchema = z.enum(['PING4SMS']);
+const smsMethodSchema = z.enum(['GET', 'POST']);
+const smsCredentialsSchema = z.record(z.string().min(1).max(200));
+const smsVariablesSchema = z.record(z.string().max(500));
+const smsTimeoutSchema = z.coerce.number().int().min(1000).max(30000);
+
+export const smsProviderInputSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  provider: smsProviderKindSchema.default('PING4SMS'),
+  isActive: z.boolean().optional(),
+  url: z.string().trim().url().max(500),
+  method: smsMethodSchema.default('GET'),
+  sender: z.string().trim().min(1).max(20),
+  route: z.string().trim().max(20).optional(),
+  templateId: z.string().trim().max(80).optional(),
+  header: z.string().trim().max(80).optional(),
+  credentials: smsCredentialsSchema.optional(),
+  messageTemplate: z.string().trim().min(1).max(1000),
+  appName: z.string().trim().min(1).max(60),
+  variables: smsVariablesSchema.optional(),
+  timeoutMs: smsTimeoutSchema.optional(),
+});
+
+export const updateSmsProviderSchema = z.object({
+  name: z.string().trim().min(1).max(80).optional(),
+  provider: smsProviderKindSchema.optional(),
+  isActive: z.boolean().optional(),
+  url: z.string().trim().url().max(500).optional(),
+  method: smsMethodSchema.optional(),
+  sender: z.string().trim().min(1).max(20).optional(),
+  route: z.string().trim().max(20).optional(),
+  templateId: z.string().trim().max(80).optional(),
+  header: z.string().trim().max(80).optional(),
+  credentials: smsCredentialsSchema.optional(),
+  messageTemplate: z.string().trim().min(1).max(1000).optional(),
+  appName: z.string().trim().min(1).max(60).optional(),
+  variables: smsVariablesSchema.optional(),
+  timeoutMs: smsTimeoutSchema.optional(),
+});
+
+export const smsTestSchema = z
+  .object({
+    numbers: z.array(z.string().trim().min(6).max(15)).min(1).max(25),
+    code: z.string().trim().min(4).max(12).optional(),
+    providerId: z.string().trim().min(1).optional(),
+    config: updateSmsProviderSchema.optional(),
+  })
+  .refine((value) => Boolean(value.providerId) || Boolean(value.config), {
+    message: 'Provide providerId or an inline config to test',
+    path: ['providerId'],
+  });

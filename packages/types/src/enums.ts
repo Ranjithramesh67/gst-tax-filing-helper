@@ -102,6 +102,11 @@ export const ReleaseChannel = {
 } as const;
 export type ReleaseChannel = (typeof ReleaseChannel)[keyof typeof ReleaseChannel];
 
+export const SmsProviderKind = {
+  PING4SMS: 'PING4SMS',
+} as const;
+export type SmsProviderKind = (typeof SmsProviderKind)[keyof typeof SmsProviderKind];
+
 export const OtpPurpose = {
   CLIENT_ONBOARDING: 'CLIENT_ONBOARDING',
   DEVICE_PAIRING: 'DEVICE_PAIRING',

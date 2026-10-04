@@ -1,4 +1,4 @@
-import { PaymentMethod, PaymentStatus, Role, RoleScope } from './enums';
+import { PaymentMethod, PaymentStatus, Role, RoleScope, SmsProviderKind } from './enums';
 import type {
   AppNotification,
   AppRelease,
@@ -28,6 +28,7 @@ import type {
   PublicPaymentRequest,
   RoleDefinition,
   SmsMessage,
+  SmsProviderConfig,
   Subscription,
   User,
 } from './entities';
@@ -281,6 +282,34 @@ export interface CreateReleaseBody {
   changelog?: string;
   mandatory?: boolean;
 }
+
+export interface SmsProviderBody {
+  name: string;
+  provider?: SmsProviderKind;
+  isActive?: boolean;
+  url: string;
+  method?: 'GET' | 'POST';
+  sender: string;
+  route?: string;
+  templateId?: string;
+  header?: string;
+  credentials?: Record<string, string>;
+  messageTemplate: string;
+  appName: string;
+  variables?: Record<string, string>;
+  timeoutMs?: number;
+}
+
+export type UpdateSmsProviderBody = Partial<SmsProviderBody>;
+
+export interface TestSmsProviderBody {
+  numbers: string[];
+  code?: string;
+  providerId?: string;
+  config?: UpdateSmsProviderBody;
+}
+
+export type SmsProviderConfigList = SmsProviderConfig[];
 
 export interface CreateGstReturnBody {
   clientId: string;

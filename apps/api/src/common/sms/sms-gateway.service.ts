@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+import { SmsProviderConfigService } from './sms-provider-config.service';
+
 export interface SmsSendResult {
   ok: boolean;
   status?: number;
@@ -22,7 +24,10 @@ const DEFAULT_TIMEOUT_MS = 8000;
 export class SmsGatewayService {
   private readonly logger = new Logger(SmsGatewayService.name);
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly providers: SmsProviderConfigService,
+  ) {}
 
   private get enabled(): boolean {
     return this.config.get<string>('SMS_GATEWAY_ENABLED') === 'true';
@@ -42,6 +47,16 @@ export class SmsGatewayService {
   }
 
   async sendOtp(phone: string, code: string): Promise<SmsSendResult> {
+    // Prefer the super-admin configured provider; fall back to env config.
+    const resolved = await this.providers.getActiveResolved().catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Failed to load active SMS provider: ${message}`);
+      return null;
+    });
+    if (resolved) {
+      return this.providers.sendResolved(resolved, phone, code);
+    }
+
     if (!this.enabled) return { ok: false, skipped: true };
 
     const key = this.config.get<string>('SMS_GATEWAY_KEY');

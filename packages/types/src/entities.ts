@@ -12,6 +12,7 @@ import {
   ReturnType,
   Role,
   SmsCategory,
+  SmsProviderKind,
   SmsStatus,
 } from './enums';
 
@@ -436,6 +437,47 @@ export interface AppRelease {
   changelog?: string | null;
   mandatory: boolean;
   publishedAt: string;
+}
+
+export interface SmsProviderConfig {
+  id: string;
+  name: string;
+  provider: SmsProviderKind;
+  isActive: boolean;
+  url: string;
+  method: string;
+  sender: string;
+  route?: string | null;
+  templateId?: string | null;
+  header?: string | null;
+  messageTemplate: string;
+  appName: string;
+  variables?: Record<string, string> | null;
+  timeoutMs: number;
+  hasCredentials: boolean;
+  credentialKeys: string[];
+  createdAt: string;
+  updatedAt: string;
+  updatedById?: string | null;
+}
+
+export interface SmsTestResult {
+  to: string;
+  ok: boolean;
+  status?: number;
+  skipped?: boolean;
+  error?: string;
+  preview?: string;
+}
+
+export interface SmsTestReport {
+  providerId?: string | null;
+  provider?: string | null;
+  code: string;
+  total: number;
+  successCount: number;
+  failureCount: number;
+  results: SmsTestResult[];
 }
 
 export interface AuditLog {

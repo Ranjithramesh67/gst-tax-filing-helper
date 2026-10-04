@@ -21,6 +21,7 @@ import type {
   PublicPaymentRequest,
   RoleDefinition,
   SmsMessage,
+  SmsProviderConfig,
   Subscription,
   User,
 } from '@gstflow/types';
@@ -606,6 +607,51 @@ export function serialiseRelease(release: {
     changelog: release.changelog,
     mandatory: release.mandatory,
     publishedAt: iso(release.publishedAt)!,
+  };
+}
+
+export function serialiseSmsProvider(
+  provider: {
+    id: string;
+    name: string;
+    provider: string;
+    isActive: boolean;
+    url: string;
+    method: string;
+    sender: string;
+    route: string | null;
+    templateId: string | null;
+    header: string | null;
+    messageTemplate: string;
+    appName: string;
+    variables: unknown;
+    timeoutMs: number;
+    createdAt: Date;
+    updatedAt: Date;
+    updatedById: string | null;
+  },
+  credentialKeys: string[],
+): SmsProviderConfig {
+  return {
+    id: provider.id,
+    name: provider.name,
+    provider: provider.provider as SmsProviderConfig['provider'],
+    isActive: provider.isActive,
+    url: provider.url,
+    method: provider.method,
+    sender: provider.sender,
+    route: provider.route,
+    templateId: provider.templateId,
+    header: provider.header,
+    messageTemplate: provider.messageTemplate,
+    appName: provider.appName,
+    variables: (provider.variables as Record<string, string> | null) ?? null,
+    timeoutMs: provider.timeoutMs,
+    hasCredentials: credentialKeys.length > 0,
+    credentialKeys,
+    createdAt: iso(provider.createdAt)!,
+    updatedAt: iso(provider.updatedAt)!,
+    updatedById: provider.updatedById,
   };
 }
 

@@ -192,6 +192,27 @@ notification per bucket (`RETURN_DUE_7D`, `RETURN_DUE_3D`, `RETURN_DUE_1D`,
 `REMINDER_INTERVAL_MS` (default 6h); set `REMINDERS_ENABLED=false` to disable, and
 `NOTIFY_WEBHOOK_URL` to also POST new notifications to a webhook.
 
+## SMS gateway (super admin)
+
+Outbound OTP SMS is configured at runtime from the super admin panel. The active
+provider is used for OTP delivery; if none is configured the env-based
+`SMS_GATEWAY_*` gateway is used as a fallback. Credentials are encrypted at rest
+and never returned (only their key names are exposed).
+
+| Method | Path | Auth | Key request fields | Response |
+|---|---|---|---|---|
+| GET | `/admin/sms-providers` | `SUPER_ADMIN` | - | `SmsProviderConfig[]` |
+| GET | `/admin/sms-providers/:id` | `SUPER_ADMIN` | - | `SmsProviderConfig` |
+| POST | `/admin/sms-providers` | `SUPER_ADMIN` | `name`, `url`, `sender`, `messageTemplate`, `appName`, `credentials?`, `provider?`, `method?`, `route?`, `templateId?`, `header?`, `variables?`, `timeoutMs?`, `isActive?` | `SmsProviderConfig` |
+| PATCH | `/admin/sms-providers/:id` | `SUPER_ADMIN` | any create field (all optional; omit `credentials` to keep existing) | `SmsProviderConfig` |
+| POST | `/admin/sms-providers/:id/activate` | `SUPER_ADMIN` | - | `SmsProviderConfig` |
+| POST | `/admin/sms-providers/test` | `SUPER_ADMIN` | `numbers[]`, `code?`, `providerId?` and/or `config?` | `SmsTestReport` |
+
+Message tokens: `{{app name}}` / `{{app_name}}` resolve to `appName`, `{{variable}}`
+/ `{{otp}}` / `{{code}}` resolve to the OTP, and any other `{{token}}` resolves from
+the `variables` map. `SmsTestReport` returns per-number `{ to, ok, status?, error?, preview? }`
+without echoing credentials.
+
 ## Enums
 
 - `Role`: `SUPER_ADMIN`, `FIRM_ADMIN`, `FILER`, `CLIENT`
@@ -205,3 +226,4 @@ notification per bucket (`RETURN_DUE_7D`, `RETURN_DUE_3D`, `RETURN_DUE_1D`,
 - `OtpPurpose`: `CLIENT_ONBOARDING`, `DEVICE_PAIRING`, `LOGIN`
 - `DevicePlatform`: `ANDROID`, `IOS`
 - `ReleaseChannel`: `STABLE`, `BETA`
+- `SmsProviderKind`: `PING4SMS`

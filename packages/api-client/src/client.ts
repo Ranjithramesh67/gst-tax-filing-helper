@@ -73,7 +73,11 @@ import type {
   SmsIngestBody,
   SmsIngestResponse,
   SmsMessage,
+  SmsProviderBody,
+  SmsProviderConfig,
+  SmsTestReport,
   Subscription,
+  TestSmsProviderBody,
   UnreadCountResponse,
   UpdateBillingInvoiceBody,
   UpdateClientBody,
@@ -83,6 +87,7 @@ import type {
   UpdateFirmSettingsBody,
   UpdatePaymentBody,
   UpdateRoleBody,
+  UpdateSmsProviderBody,
   UpdateSubscriptionBody,
   UpdateTeamMemberBody,
   UpdateUserBody,
@@ -293,6 +298,18 @@ export class GstFlowApi {
       list: (query?: ListQuery & { platform?: string; channel?: string }) =>
         this.http.get<PaginatedReleases>('/admin/releases', query),
       create: (body: CreateReleaseBody) => this.http.post<AppRelease>('/admin/releases', body),
+    },
+    smsProviders: {
+      list: () => this.http.get<SmsProviderConfig[]>('/admin/sms-providers'),
+      get: (id: string) => this.http.get<SmsProviderConfig>(`/admin/sms-providers/${id}`),
+      create: (body: SmsProviderBody) =>
+        this.http.post<SmsProviderConfig>('/admin/sms-providers', body),
+      update: (id: string, body: UpdateSmsProviderBody) =>
+        this.http.patch<SmsProviderConfig>(`/admin/sms-providers/${id}`, body),
+      activate: (id: string) =>
+        this.http.post<SmsProviderConfig>(`/admin/sms-providers/${id}/activate`, {}),
+      test: (body: TestSmsProviderBody) =>
+        this.http.post<SmsTestReport>('/admin/sms-providers/test', body),
     },
     audit: {
       list: (query?: ListQuery & { firmId?: string; action?: string; entity?: string }) =>

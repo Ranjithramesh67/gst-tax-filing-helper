@@ -4,7 +4,10 @@ import {
   createReleaseSchema,
   createUserSchema,
   roleSchema,
+  smsProviderInputSchema,
+  smsTestSchema,
   updateFirmSchema,
+  updateSmsProviderSchema,
   updateUserSchema,
 } from '@gstflow/validation';
 
@@ -13,6 +16,9 @@ export type UpdateFirmInput = z.infer<typeof updateFirmSchema>;
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 export type CreateReleaseInput = z.infer<typeof createReleaseSchema>;
+export type CreateSmsProviderInput = z.infer<typeof smsProviderInputSchema>;
+export type UpdateSmsProviderInput = z.infer<typeof updateSmsProviderSchema>;
+export type TestSmsProviderInput = z.infer<typeof smsTestSchema>;
 
 const pageField = z.coerce.number().int().min(1).default(1);
 const pageSizeField = z.coerce.number().int().min(1).max(200).default(25);

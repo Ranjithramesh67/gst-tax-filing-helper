@@ -502,6 +502,33 @@ model AppRelease {
   @@index([platform, channel])
 }
 
+enum SmsProviderKind {
+  PING4SMS
+}
+
+model SmsProviderConfig {
+  id              String          @id @default(cuid())
+  name            String
+  provider        SmsProviderKind @default(PING4SMS)
+  isActive        Boolean         @default(false)
+  url             String
+  method          String          @default("GET")
+  sender          String
+  route           String?
+  templateId      String?
+  header          String?
+  credentials     String
+  messageTemplate String
+  appName         String
+  variables       Json?
+  timeoutMs       Int             @default(8000)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  updatedById     String?
+
+  @@index([isActive])
+}
+
 model AuditLog {
   id        String   @id @default(cuid())
   actorId   String?

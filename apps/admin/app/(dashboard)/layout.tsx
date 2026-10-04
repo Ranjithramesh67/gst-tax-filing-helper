@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { Building2, LayoutDashboard, LogOut, ScrollText, ShieldCheck, Smartphone, Users, Wallet } from 'lucide-react';
+import { Building2, LayoutDashboard, LogOut, MessageSquare, ScrollText, ShieldCheck, Smartphone, Users, Wallet } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/components/ui';
 
@@ -14,6 +14,7 @@ const NAV = [
   { href: '/users', label: 'Users', icon: Users },
   { href: '/roles', label: 'Roles', icon: ShieldCheck },
   { href: '/releases', label: 'App Releases', icon: Smartphone },
+  { href: '/sms-gateway', label: 'SMS Gateway', icon: MessageSquare },
   { href: '/audit', label: 'Audit Log', icon: ScrollText },
 ];
 
