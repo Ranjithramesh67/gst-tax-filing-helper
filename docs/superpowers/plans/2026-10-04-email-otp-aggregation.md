@@ -242,7 +242,7 @@ async recordFromSms(input: { firmId; clientId; deviceId: string | null; code; sn
         snippet: this.crypto.encrypt(input.snippet), receivedAt: input.receivedAt,
         sourceRef: input.sourceRef, groupId: groupId ?? undefined,
       },
-      select: { id: true },
+      select: { id: true, groupId: true },
     });
     if (!created.groupId) await this.prisma.otpEvent.update({ where: { id: created.id }, data: { groupId: created.id } });
   } catch (error) {
@@ -254,19 +254,20 @@ async recordFromSms(input: { firmId; clientId; deviceId: string | null; code; sn
   Note: `groupId` doubles as the group's first event id. Set it to the created event's own id when no prior group matched. The snippet is encrypted at rest (`snippet` column); decrypt on read.
 
 - [ ] **Step 4: Run the test to verify it passes**.
-- [ ] **Step 5: Wire into `sms.ingest`** — after `persistParsed(created.id, item.body)`, call:
+- [ ] **Step 5: Wire into `sms.ingest`** — extend the existing `targets` query to select `firmId` too (`select: { id: true, firmId: true }`), build `const firmOfClient = new Map(targets.map((t) => [t.id, t.firmId]))` once before the loop, then after `persistParsed(created.id, item.body)` call:
 
 ```ts
 const otp = extractOtp(item.body);
 if (otp) {
   await this.otp.recordFromSms({
-    firmId: (await this.firmOf(targetId)), clientId: targetId, deviceId,
+    firmId: firmOfClient.get(targetId)!,
+    clientId: targetId, deviceId,
     code: otp.code, snippet: otp.snippet, receivedAt, sourceRef: created.id,
   });
 }
 ```
 
-  (Cache the client→firmId map once before the loop to avoid N queries.)
+  Inject `OtpService` into `SmsService`'s constructor and import `OtpModule` into `SmsModule` (avoid a circular import by exporting `OtpService` from `OtpModule` and importing `OtpModule` into `SmsModule`).
 - [ ] **Step 6: Backfill script** — `apps/api/src/otp/backfill-otp.ts` iterating `SmsMessage` where no matching `OtpEvent(sourceRef=id)` exists, extracting and inserting; idempotent via the unique key.
 - [ ] **Step 7: Commit checkpoint**.
 
