@@ -416,3 +416,261 @@ describe('runOtpBackfill', () => {
     );
   });
 });
+
+const feedActor = {
+  userId: 'u1',
+  role: 'CLIENT',
+  roleId: null,
+  roleKey: 'CLIENT',
+  roleName: null,
+  isSuperAdmin: false,
+  permissions: [],
+  firmId: 'firm-1',
+  clientId: 'client-1',
+} as unknown as Actor;
+
+function otpRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'otp-1',
+    groupId: 'group-1',
+    clientId: 'client-1',
+    deviceId: null,
+    code: '4831',
+    source: 'SMS',
+    fromAddress: null,
+    subject: null,
+    snippet: 'enc:login OTP ••••',
+    receivedAt: new Date('2026-10-04T10:00:00.000Z'),
+    sourceRef: 'sms-1',
+    createdAt: new Date('2026-10-04T10:00:00.000Z'),
+    ...overrides,
+  };
+}
+
+function smsRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'sms-1',
+    clientId: 'client-1',
+    deviceId: null,
+    sender: 'AD-GSTIND-S',
+    bodyEncrypted: 'enc:Your login OTP is 4831. Do not share.',
+    receivedAt: new Date('2026-10-04T10:00:00.000Z'),
+    category: 'OTP',
+    status: 'RECEIVED',
+    hash: 'hash-1',
+    createdAt: new Date('2026-10-04T10:00:00.000Z'),
+    client: { id: 'client-1', name: 'Acme Traders', gstin: null },
+    parsed: null,
+    ...overrides,
+  };
+}
+
+function buildFeedPrisma() {
+  const prisma = {
+    otpEvent: { findMany: jest.fn().mockResolvedValue([]) },
+    smsMessage: { findMany: jest.fn().mockResolvedValue([]) },
+    client: {
+      findMany: jest.fn().mockResolvedValue([{ id: 'client-1', name: 'Acme Traders' }]),
+    },
+  };
+  return prisma as unknown as PrismaService & { [key: string]: any };
+}
+
+describe('OtpService.listFeed', () => {
+  it('collapses SMS+EMAIL events of the same code into one OTP item', async () => {
+    const prisma = buildFeedPrisma();
+    (prisma.otpEvent.findMany as jest.Mock)
+      // First call: feed OTP events (newest first). Subsequent call: dedupe refs.
+      .mockResolvedValueOnce([
+        otpRow({
+          id: 'otp-email',
+          source: 'EMAIL',
+          fromAddress: 'noreply@bank.example',
+          subject: 'Your one-time password',
+          snippet: 'enc:Your OTP is ••••',
+          receivedAt: new Date('2026-10-04T10:00:30.000Z'),
+          sourceRef: 'email-1',
+        }),
+        otpRow({ id: 'otp-sms', receivedAt: new Date('2026-10-04T10:00:00.000Z') }),
+      ])
+      .mockResolvedValueOnce([{ sourceRef: 'sms-1' }]);
+    (prisma.smsMessage.findMany as jest.Mock).mockResolvedValue([smsRow()]);
+
+    const service = new OtpService(prisma, buildCrypto());
+    const result = await service.listFeed(feedActor, {});
+
+    expect(result.items).toHaveLength(1);
+    const item = result.items[0];
+    expect(item.kind).toBe('OTP');
+    if (item.kind !== 'OTP') throw new Error('expected OTP item');
+    expect(item).toMatchObject({
+      id: 'group-1',
+      code: '4831',
+      sources: ['SMS', 'EMAIL'],
+      eventCount: 2,
+      client: { id: 'client-1', name: 'Acme Traders' },
+      receivedAt: '2026-10-04T10:00:00.000Z',
+      latestAt: '2026-10-04T10:00:30.000Z',
+    });
+    // The raw SMS backing the group is deduped out entirely.
+    expect(result.items.some((entry) => entry.kind === 'SMS')).toBe(false);
+  });
+
+  it('keeps events with distinct groups (outside the window) as separate items', async () => {
+    const prisma = buildFeedPrisma();
+    (prisma.otpEvent.findMany as jest.Mock)
+      .mockResolvedValueOnce([
+        otpRow({
+          id: 'otp-late',
+          groupId: 'group-late',
+          receivedAt: new Date('2026-10-04T10:10:00.000Z'),
+          sourceRef: 'sms-late',
+        }),
+        otpRow({
+          id: 'otp-early',
+          groupId: 'group-early',
+          receivedAt: new Date('2026-10-04T10:00:00.000Z'),
+        }),
+      ])
+      .mockResolvedValueOnce([]);
+
+    const service = new OtpService(prisma, buildCrypto());
+    const result = await service.listFeed(feedActor, {});
+
+    expect(result.items).toHaveLength(2);
+    expect(result.items.map((item) => item.id)).toEqual(['group-late', 'group-early']);
+    expect(result.items.every((item) => item.kind === 'OTP')).toBe(true);
+  });
+
+  it('still surfaces a non-OTP SMS as a kind:SMS item', async () => {
+    const prisma = buildFeedPrisma();
+    (prisma.otpEvent.findMany as jest.Mock)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    (prisma.smsMessage.findMany as jest.Mock).mockResolvedValue([
+      smsRow({ id: 'sms-plain', category: 'TRANSACTIONAL' }),
+    ]);
+
+    const service = new OtpService(prisma, buildCrypto());
+    const result = await service.listFeed(feedActor, {});
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({ kind: 'SMS', id: 'sms-plain' });
+  });
+
+  it('never returns a full SMS body, only a short snippet', async () => {
+    const prisma = buildFeedPrisma();
+    (prisma.otpEvent.findMany as jest.Mock)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    const longBody = `Invoice ${'x'.repeat(400)} end`;
+    (prisma.smsMessage.findMany as jest.Mock).mockResolvedValue([
+      smsRow({ id: 'sms-long', bodyEncrypted: `enc:${longBody}` }),
+    ]);
+
+    const service = new OtpService(prisma, buildCrypto());
+    const result = await service.listFeed(feedActor, {});
+
+    const item = result.items[0];
+    expect(item.kind).toBe('SMS');
+    if (item.kind !== 'SMS') throw new Error('expected SMS item');
+    expect(item.body.length).toBeLessThanOrEqual(161);
+    expect(item.body).not.toBe(longBody);
+  });
+
+  it('masks the OTP code out of the returned snippet', async () => {
+    const prisma = buildFeedPrisma();
+    (prisma.otpEvent.findMany as jest.Mock)
+      .mockResolvedValueOnce([
+        otpRow({ snippet: 'enc:Your code is 4831 now', sourceRef: 'sms-1' }),
+      ])
+      .mockResolvedValueOnce([{ sourceRef: 'sms-1' }]);
+    (prisma.smsMessage.findMany as jest.Mock).mockResolvedValue([]);
+
+    const service = new OtpService(prisma, buildCrypto());
+    const result = await service.listFeed(feedActor, {});
+
+    const item = result.items[0];
+    if (item.kind !== 'OTP') throw new Error('expected OTP item');
+    expect(item.snippet).not.toContain('4831');
+  });
+
+  it('returns no rows when the query asks for another client', async () => {
+    const prisma = buildFeedPrisma();
+    const service = new OtpService(prisma, buildCrypto());
+
+    const result = await service.listFeed(feedActor, { clientId: 'client-2' });
+
+    expect(result).toMatchObject({ items: [], total: 0, page: 1, pageSize: 25 });
+    expect(prisma.otpEvent.findMany).not.toHaveBeenCalled();
+  });
+
+  it('scopes the OTP query to the actor firm and client', async () => {
+    const prisma = buildFeedPrisma();
+    const service = new OtpService(prisma, buildCrypto());
+
+    await service.listFeed(feedActor, {});
+
+    expect(prisma.otpEvent.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ firmId: 'firm-1', clientId: 'client-1' }),
+        take: 500,
+      }),
+    );
+    expect(prisma.smsMessage.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ clientId: 'client-1' }),
+        take: 500,
+      }),
+    );
+  });
+
+  it('applies category and search to raw SMS only', async () => {
+    const prisma = buildFeedPrisma();
+    const service = new OtpService(prisma, buildCrypto());
+
+    await service.listFeed(feedActor, { category: 'OTP', search: 'bank' });
+
+    const smsArg = (prisma.smsMessage.findMany as jest.Mock).mock.calls[0][0];
+    expect(smsArg.where).toMatchObject({
+      clientId: 'client-1',
+      category: 'OTP',
+      sender: { contains: 'bank', mode: 'insensitive' },
+    });
+    const otpArg = (prisma.otpEvent.findMany as jest.Mock).mock.calls[0][0];
+    expect(otpArg.where).not.toHaveProperty('category');
+  });
+
+  it('paginates in memory and reports the over-fetched total', async () => {
+    const prisma = buildFeedPrisma();
+    const rows = Array.from({ length: 30 }, (_, index) =>
+      smsRow({
+        id: `sms-${index}`,
+        receivedAt: new Date(`2026-10-04T10:${String(index).padStart(2, '0')}:00.000Z`),
+      }),
+    );
+    (prisma.otpEvent.findMany as jest.Mock)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    (prisma.smsMessage.findMany as jest.Mock).mockResolvedValue(rows);
+
+    const service = new OtpService(prisma, buildCrypto());
+    const result = await service.listFeed(feedActor, { page: '2', pageSize: '10' });
+
+    expect(result.total).toBe(30);
+    expect(result.page).toBe(2);
+    expect(result.totalPages).toBe(3);
+    expect(result.items).toHaveLength(10);
+    // Newest-first: page 2 starts at index 10.
+    expect(result.items[0].id).toBe('sms-19');
+  });
+
+  it('refuses a non-CLIENT actor', async () => {
+    const prisma = buildFeedPrisma();
+    const service = new OtpService(prisma, buildCrypto());
+    const staff = { ...feedActor, role: 'FILER', clientId: null } as unknown as Actor;
+
+    await expect(service.listFeed(staff, {})).rejects.toThrow();
+    expect(prisma.otpEvent.findMany).not.toHaveBeenCalled();
+  });
+});
