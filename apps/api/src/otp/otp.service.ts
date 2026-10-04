@@ -350,8 +350,9 @@ export class OtpService {
    * over-fetched window capped at {@link FEED_OVERFETCH} rows per source.
    *
    * Privacy: an OTP group exposes only its code plus a short, code-masked
-   * snippet/context; raw SMS bodies are truncated to a short snippet so a full
-   * message body is never returned here.
+   * snippet/context. Raw SMS rows reuse the same full decrypted body as the
+   * dedicated SMS feed — the authorized firm may see forwarded SMS; only full
+   * EMAIL bodies are never stored/uploaded.
    */
   async listFeed(actor: Actor, query: InboxListQueryDto): Promise<PaginatedInbox> {
     const clientId = actor.clientId;
@@ -428,9 +429,12 @@ export class OtpService {
   }
 
   private serialiseInboxSms(row: InboxSmsRow): InboxItem {
+    // Privacy boundary: OTP/email snippets are masked and full email bodies are
+    // never stored, but forwarded SMS bodies are shown in full to the authorized
+    // firm (matching the existing `/sms` feed via serialiseSms).
     let body = '';
     try {
-      body = shorten(this.crypto.decrypt(row.bodyEncrypted));
+      body = this.crypto.decrypt(row.bodyEncrypted);
     } catch {
       body = '';
     }

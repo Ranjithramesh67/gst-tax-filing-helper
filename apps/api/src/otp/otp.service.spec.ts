@@ -558,7 +558,7 @@ describe('OtpService.listFeed', () => {
     expect(result.items[0]).toMatchObject({ kind: 'SMS', id: 'sms-plain' });
   });
 
-  it('never returns a full SMS body, only a short snippet', async () => {
+  it('returns the full decrypted SMS body and never exposes ciphertext or hash', async () => {
     const prisma = buildFeedPrisma();
     (prisma.otpEvent.findMany as jest.Mock)
       .mockResolvedValueOnce([])
@@ -574,8 +574,9 @@ describe('OtpService.listFeed', () => {
     const item = result.items[0];
     expect(item.kind).toBe('SMS');
     if (item.kind !== 'SMS') throw new Error('expected SMS item');
-    expect(item.body.length).toBeLessThanOrEqual(161);
-    expect(item.body).not.toBe(longBody);
+    expect(item.body).toBe(longBody);
+    expect(item).not.toHaveProperty('bodyEncrypted');
+    expect(item).not.toHaveProperty('hash');
   });
 
   it('masks the OTP code out of the returned snippet', async () => {

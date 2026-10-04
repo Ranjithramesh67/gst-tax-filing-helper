@@ -121,7 +121,7 @@ describe('Unified inbox feed (e2e)', () => {
             source: 'EMAIL',
             fromAddress: 'noreply@bank.example',
             subject: 'Your one-time password',
-            snippet: 'Your OTP is ••••',
+            snippet: `Your OTP is ${code}`,
             receivedAt,
             sourceRef: `email-${code}-${suffix}`,
           },
@@ -148,6 +148,8 @@ describe('Unified inbox feed (e2e)', () => {
     expect(item.sources.sort()).toEqual(['EMAIL', 'SMS']);
     expect(item.eventCount).toBe(2);
     expect(item.client.id).toBe(clientId);
+    // The OTP snippet is masked: the raw code must never leak.
+    expect(item.snippet ?? '').not.toContain(code);
     // The OTP SMS is represented by the group, never as a raw SMS row.
     expect(res.body.items.some((entry: { kind: string; id: string }) => entry.kind === 'SMS' && entry.id === smsId)).toBe(false);
   });
@@ -183,8 +185,10 @@ describe('Unified inbox feed (e2e)', () => {
       (entry: { kind: string; id: string }) => entry.kind === 'SMS' && entry.id === smsId,
     );
     expect(row).toBeDefined();
-    expect(row.body).not.toBe(body);
-    expect(row.body.length).toBeLessThanOrEqual(161);
+    // SMS bodies match the existing /sms feed: returned in full, no truncation.
+    expect(row.body).toBe(body);
+    expect(row.bodyEncrypted).toBeUndefined();
+    expect(row.hash).toBeUndefined();
   });
 
   it('filters by search across OTP and SMS rows', async () => {
