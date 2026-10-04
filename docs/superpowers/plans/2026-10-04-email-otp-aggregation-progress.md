@@ -23,7 +23,7 @@ Execution mode: subagent-driven-development
 | # | Task | Status | Commits |
 |---|------|--------|---------|
 | 1 | `@gstflow/otp` extractor package | done (review clean) | `baa0131`, `7dc459a` |
-| 2 | Prisma `OtpEvent` model + shared types | pending | - |
+| 2 | Prisma `OtpEvent` model + shared types | done (review clean) | `9df0791`, `aacd928` |
 | 3 | Extract OTPs from SMS on ingest + backfill | pending | - |
 | 4 | `POST /otp/ingest` + validation | pending | - |
 | 5 | `GET /inbox` unified feed | pending | - |
@@ -53,3 +53,13 @@ Execution mode: subagent-driven-development
   than the snippet window (40 before/120 after) so chosen code and snippet can
   disagree; (c) "nearest token" still lets a preceding year win in e.g.
   `2026 OTP is 4831`.
+- **Binding constraint for Tasks 3-4:** `OtpEvent.sourceRef` MUST always be
+  non-null. Postgres treats NULLs as distinct in `@@unique([clientId, source,
+  sourceRef])`, so a null ref would defeat dedupe. Task 3 SMS path uses the
+  `SmsMessage.id`; Task 4 email path requires `sourceRef` (min 4 chars, the
+  provider message id).
+- **Task 2 environment note:** `prisma migrate dev` reset the local DB due to a
+  pre-existing migration checksum mismatch, then replayed all migrations. Local DB
+  was re-seeded via `npm run db:seed --workspace @gstflow/api`. Before deploy
+  (Task 19) verify remote `_prisma_migrations` checksums are consistent with the
+  committed migration files (esp. `20261003160000_rbac_roles_permissions`).
