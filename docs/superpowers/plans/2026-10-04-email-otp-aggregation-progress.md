@@ -29,7 +29,7 @@ Execution mode: subagent-driven-development
 | 5 | `GET /inbox` unified feed | done (review clean after correction) | `36e6cae`, `32fd672`, `627fe7d`, `61b1fc2` |
 | 6 | Admin OTP settings | done (review clean) | `cf55c3d`, `e83b589`, `c0dcb59`, `70800b4`, `38e0244`, `13f6e12` |
 | 7 | Firm web `/sms` OTP card | done (review clean) | `39a09b0`, `88d192d`, `37280ac`, `0da3f63` |
-| 8 | Server e2e for grouping + inbox | pending | - |
+| 8 | Server e2e for grouping + inbox (+ staff `/inbox` scoping fix) | done (review clean) | `3d10641`, `a277c9c` |
 | 9 | Kotlin OTP extractor (parity) | pending | - |
 | 10 | Encrypted account store + registry | pending | - |
 | 11 | `EmailConnector` interface + IMAP | pending | - |
@@ -57,9 +57,12 @@ Execution mode: subagent-driven-development
   existing `SmsMessage` shape via `serialiseSms` (full decrypted body), byte-parity
   with `/sms`; only OTP/email `snippet` is masked. Do not re-introduce SMS body
   truncation.
-- **Task 8 coverage:** `apps/api/test/otp-inbox.e2e-spec.ts` (committed under Task 5)
-  already exercises SMS+EMAIL grouping, cross-client isolation, unauthenticated 401
-  and firm-token 403, so Task 8's e2e is effectively satisfied.
+- **`/inbox` role scoping (corrected in Task 8):** `GET /inbox` and
+  `GET /inbox/:id` serve CLIENT + FIRM_ADMIN + FILER + SUPER_ADMIN. Staff scope by
+  `firmId` (all firm clients); clients by `firmId`+`clientId`; super admin
+  unrestricted. `query.clientId` can never widen scope; cross-firm -> empty/404.
+  `POST /otp/ingest` remains CLIENT-only. Do not re-introduce the CLIENT-only guard
+  (it broke the firm web dashboard).
 - **Commit trailer:** the repo's `prepare-commit-msg` hook auto-appends the
   `Co-authored-by: monkeycode-ai <monkeycode-ai@chaitin.com>` trailer. Do NOT add
   it manually in commit messages (it produces duplicates).
