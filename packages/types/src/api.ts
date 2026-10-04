@@ -175,6 +175,20 @@ export interface UpdateFirmBody extends Partial<CreateFirmBody> {
   status?: Firm['status'];
 }
 
+/** Firm-admin self-service profile update. Slug and status are intentionally excluded. */
+export interface UpdateFirmSettingsBody {
+  name?: string;
+  gstin?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  logoUrl?: string | null;
+  brandColor?: string | null;
+  supportEmail?: string | null;
+  supportPhone?: string | null;
+  address?: string | null;
+  defaultFilingFee?: number | null;
+}
+
 export interface CreateUserBody {
   name: string;
   email: string;

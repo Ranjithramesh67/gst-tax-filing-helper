@@ -75,6 +75,7 @@ import type {
   UpdateFilingBody,
   UpdateFilingStatusBody,
   UpdateFirmBody,
+  UpdateFirmSettingsBody,
   UpdatePaymentBody,
   UpdateRoleBody,
   UpdateSubscriptionBody,
@@ -223,6 +224,10 @@ export class GstFlowApi {
   };
 
   firm = {
+    profile: {
+      get: () => this.http.get<Firm>('/firm/profile'),
+      update: (body: UpdateFirmSettingsBody) => this.http.patch<Firm>('/firm/profile', body),
+    },
     permissions: () => this.http.get<FirmPermissionsResponse>('/firm/permissions'),
     roles: {
       list: () => this.http.get<FirmRolesResponse>('/firm/roles'),

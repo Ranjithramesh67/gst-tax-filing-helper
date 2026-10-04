@@ -11,6 +11,7 @@ import {
   Mail,
   Paperclip,
   Receipt,
+  Settings,
   ShieldCheck,
   UserCog,
   Users,
@@ -36,6 +37,7 @@ const NAV: Array<{
   { href: '/receivables', label: 'Receivables', icon: Wallet },
   { href: '/team', label: 'Team', icon: UserCog, permission: 'users:read' },
   { href: '/roles', label: 'Roles', icon: ShieldCheck, permission: 'roles:read' },
+  { href: '/settings', label: 'Settings', icon: Settings, permission: 'firm:read' },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {

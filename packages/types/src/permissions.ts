@@ -42,6 +42,9 @@ export const PERMISSION_DEFS: PermissionDef[] = [
 
   { key: 'audit:read', group: 'Audit', label: 'View audit log' },
 
+  { key: 'firm:read', group: 'Firm settings', label: 'View firm profile & branding' },
+  { key: 'firm:manage', group: 'Firm settings', label: 'Edit firm profile & branding' },
+
   { key: 'firms:read', group: 'Platform', label: 'View firms', platform: true },
   { key: 'firms:manage', group: 'Platform', label: 'Manage firms', platform: true },
   { key: 'releases:read', group: 'Platform', label: 'View app releases', platform: true },

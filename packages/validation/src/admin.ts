@@ -48,6 +48,30 @@ export const updateFirmSchema = z.object({
   status: z.enum(['ACTIVE', 'SUSPENDED', 'PENDING']).optional(),
 });
 
+const nullableBrandColorSchema = z
+  .string()
+  .trim()
+  .regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, 'Use a hex color like #0F766E')
+  .nullable()
+  .optional();
+
+/**
+ * Firm-admin self-service profile update. Slug and status are deliberately
+ * excluded: firm URLs are immutable and platform status is super-admin only.
+ */
+export const updateFirmSettingsSchema = z.object({
+  name: z.string().trim().min(2).max(200).optional(),
+  gstin: gstinSchema.nullable().optional(),
+  email: z.string().email().nullable().optional(),
+  phone: phoneSchema.nullable().optional(),
+  logoUrl: z.string().trim().url().max(2048).nullable().optional(),
+  brandColor: nullableBrandColorSchema,
+  supportEmail: z.string().email().nullable().optional(),
+  supportPhone: phoneSchema.nullable().optional(),
+  address: z.string().max(500).nullable().optional(),
+  defaultFilingFee: z.coerce.number().nonnegative().max(1_000_000).nullable().optional(),
+});
+
 export const createUserSchema = z.object({
   name: z.string().trim().min(2).max(200),
   email: z.string().email(),

@@ -131,6 +131,19 @@ Staff roles only.
 Notes: setting a filing to `FILED` records `filedAt`/`filedById`, and when the filing is linked to
 a return (`returnId`) the parent `GstReturn` is marked `FILED` too.
 
+## Firm settings
+
+Firm-scoped profile and branding. The target firm is always the authenticated
+user's firm (`actor.firmId`); `slug` and `status` cannot be changed here.
+
+| Method | Path | Auth | Key request fields | Response |
+|---|---|---|---|---|
+| GET | `/firm/profile` | permission `firm:read` | - | `Firm` |
+| PATCH | `/firm/profile` | permission `firm:manage` | `name?`, `gstin?`, `email?`, `phone?`, `logoUrl?`, `brandColor?`, `supportEmail?`, `supportPhone?`, `address?`, `defaultFilingFee?` (nullable fields accept `null` to clear) | `Firm` |
+
+Notes: a super admin without a firm receives `400`; every update writes a
+`firm.profile.update` audit entry.
+
 ## Admin
 
 | Method | Path | Roles | Key request fields | Response |

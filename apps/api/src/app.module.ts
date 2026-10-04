@@ -19,6 +19,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { BillingModule } from './billing/billing.module';
 import { RbacModule } from './rbac/rbac.module';
 import { LinksModule } from './links/links.module';
+import { FirmModule } from './firm/firm.module';
 
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
@@ -47,6 +48,7 @@ import { JwtModule } from './common/jwt/jwt.module';
     BillingModule,
     RbacModule,
     LinksModule,
+    FirmModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
