@@ -10,6 +10,7 @@ module.exports = {
   coverageDirectory: './coverage',
   testEnvironment: 'node',
   moduleNameMapper: {
+    '^@gstflow/otp$': '<rootDir>/../../packages/otp/src/index.ts',
     '^@gstflow/types$': '<rootDir>/../../packages/types/src/index.ts',
     '^@gstflow/validation$': '<rootDir>/../../packages/validation/src/index.ts',
   },

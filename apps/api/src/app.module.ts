@@ -11,6 +11,7 @@ import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
 import { ClientsModule } from './clients/clients.module';
 import { DevicesModule } from './devices/devices.module';
+import { OtpModule } from './otp/otp.module';
 import { SmsModule } from './sms/sms.module';
 import { DocumentsModule } from './documents/documents.module';
 import { FilingsModule } from './filings/filings.module';
@@ -43,6 +44,7 @@ import { JwtModule } from './common/jwt/jwt.module';
     AuthModule,
     ClientsModule,
     DevicesModule,
+    OtpModule,
     SmsModule,
     DocumentsModule,
     FilingsModule,

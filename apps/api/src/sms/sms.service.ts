@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { extractOtp } from '@gstflow/otp';
 import { LinkStatus, Role } from '@gstflow/types';
 import type {
   ClassifySmsBody,
@@ -13,6 +14,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { AuditService } from '../common/audit/audit.service';
 import { FilingsService } from '../filings/filings.service';
+import { OtpService } from '../otp/otp.service';
 import { paginate, parsePagination } from '../common/pagination';
 import { serialiseSms } from '../common/serializers';
 import type { Actor } from '../common/auth/actor.types';
@@ -100,6 +102,7 @@ export class SmsService {
     private readonly crypto: CryptoService,
     private readonly audit: AuditService,
     private readonly filings: FilingsService,
+    private readonly otp: OtpService,
   ) {}
 
   private scope(actor: Actor): Prisma.SmsMessageWhereInput {
@@ -195,12 +198,13 @@ export class SmsService {
         status: { not: 'ARCHIVED' },
         linkStatus: LinkStatus.ACTIVE,
       },
-      select: { id: true },
+      select: { id: true, firmId: true },
     });
     if (targets.length === 0) {
       throw new ForbiddenException('No confirmed firm is linked to this number');
     }
     const targetIds = targets.map((target) => target.id);
+    const firmOfClient = new Map(targets.map((target) => [target.id, target.firmId]));
 
     const deviceIds = [
       ...new Set(
@@ -266,6 +270,18 @@ export class SmsService {
           ids.push(created.id);
           if (!lastReceivedAt || receivedAt > lastReceivedAt) lastReceivedAt = receivedAt;
           await this.persistParsed(created.id, item.body);
+          const otp = extractOtp(item.body);
+          if (otp) {
+            await this.otp.recordFromSms({
+              firmId: firmOfClient.get(targetId)!,
+              clientId: targetId,
+              deviceId,
+              code: otp.code,
+              snippet: otp.snippet,
+              receivedAt,
+              sourceRef: created.id,
+            });
+          }
           await this.reconcileFiling(created.id, targetId, item.body, receivedAt);
         } catch (error) {
           if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
