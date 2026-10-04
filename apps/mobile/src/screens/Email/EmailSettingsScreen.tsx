@@ -137,7 +137,6 @@ export function EmailSettingsScreen(): React.ReactElement {
         return;
       }
       setAddress('');
-      setPassword('');
       setHost('');
       setPort('993');
       setErrors({});
@@ -146,6 +145,9 @@ export function EmailSettingsScreen(): React.ReactElement {
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Could not add the account.');
     } finally {
+      // Never retain the password in state after a submit attempt, even on
+      // failure, while leaving the other fields so the user can retry.
+      setPassword('');
       setAdding(false);
     }
   }, [address, host, load, password, port, validate]);
