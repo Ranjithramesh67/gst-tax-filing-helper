@@ -471,10 +471,10 @@ export function OtpCard({ item }: { item: Extract<InboxItem, { kind: 'OTP' }> })
 - `@ReactMethod addImapAccount(address, password, host, port, promise)`; `listAccounts(promise)`; `removeAccount(id, promise)`; `setEnabled(id, enabled, promise)`; plus Gmail/Graph link methods (Task 15/16).
 - JS `EmailAccounts.addImapAccount(...)`, `.list()`, `.remove(id)`, `.setEnabled(id, enabled)`.
 
-- [ ] **Step 1: Module** validates input, stores via `EmailAccounts`, kicks a poll, resolves `{ ok: true }`.
-- [ ] **Step 2: JS wrapper** with a non-Android no-op fallback (mirror `SmsReader.ts`).
-- [ ] **Step 3: Consent** gate: `EmailPoller` skips accounts until `EmailAccounts.setConsent(true)` has been called (stored in sync prefs).
-- [ ] **Step 4: Commit checkpoint.**
+- [x] **Step 1: Module** validates input, stores via `EmailAccounts`, kicks a poll, resolves `{ ok: true }`.
+- [x] **Step 2: JS wrapper** with a non-Android no-op fallback (mirror `SmsReader.ts`).
+- [x] **Step 3: Consent** gate: `EmailPoller` skips accounts until `EmailAccounts.setConsent(true)` has been called (stored in sync prefs).
+- [x] **Step 4: Commit checkpoint.**
 
 ### Task 14: Mobile email settings screen
 
