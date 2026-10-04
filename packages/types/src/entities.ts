@@ -559,6 +559,23 @@ export interface AppNotification {
   createdAt: string;
 }
 
+export type OtpSource = 'SMS' | 'EMAIL';
+
+export interface OtpEvent {
+  id: string;
+  firmId: string;
+  clientId: string;
+  deviceId: string | null;
+  code: string;
+  source: OtpSource;
+  fromAddress: string | null;
+  subject: string | null;
+  snippet: string | null;
+  receivedAt: string;
+  groupId: string | null;
+  createdAt: string;
+}
+
 export interface Paginated<T> {
   items: T[];
   total: number;

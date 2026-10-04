@@ -91,6 +91,11 @@ enum OtpPurpose {
   LOGIN
 }
 
+enum OtpSource {
+  SMS
+  EMAIL
+}
+
 enum PaymentStatus {
   PENDING
   COMPLETED
@@ -726,4 +731,25 @@ model Notification {
   @@unique([firmId, dedupeKey])
   @@index([firmId, readAt])
   @@index([clientId, readAt])
+}
+
+model OtpEvent {
+  id          String    @id @default(cuid())
+  firmId      String
+  clientId    String
+  deviceId    String?
+  code        String
+  source      OtpSource
+  fromAddress String?
+  subject     String?
+  snippet     String?
+  receivedAt  DateTime
+  sourceRef   String?
+  groupId     String?
+  createdAt   DateTime  @default(now())
+
+  @@unique([clientId, source, sourceRef])
+  @@index([firmId, receivedAt])
+  @@index([clientId, code, receivedAt])
+  @@index([groupId])
 }
