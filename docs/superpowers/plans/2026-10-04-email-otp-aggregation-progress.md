@@ -33,7 +33,7 @@ Execution mode: subagent-driven-development
 | 9 | Kotlin OTP extractor (parity) | done (review clean after fix) | `008c5f3`, `2f1c9f4` |
 | 10 | Encrypted account store + registry | done (review clean) | `23be95a` |
 | 11 | `EmailConnector` interface + IMAP | done (review clean after fixes) | `24f5ccf`, `e98f68c`, `88f570f` |
-| 12 | Poller + outbox + retry job | pending | - |
+| 12 | Poller + outbox + retry job | done (review clean) | `2c0b881` |
 | 13 | RN bridge + JS wrapper + consent | pending | - |
 | 14 | Mobile email settings screen | pending | - |
 | 15 | Gmail connector | pending | - |
@@ -63,6 +63,14 @@ Execution mode: subagent-driven-development
   unrestricted. `query.clientId` can never widen scope; cross-firm -> empty/404.
   `POST /otp/ingest` remains CLIENT-only. Do not re-introduce the CLIENT-only guard
   (it broke the firm web dashboard).
+- **Carry-forward into Task 13 (required):** `EmailPoller.pollAll` has NO consent
+  gate yet (safe today because nothing links an account). Task 13 MUST gate
+  polling/upload on the email-reading consent BEFORE any account-linking UI can
+  exist, so a half-landed link feature cannot read/upload mail.
+- **Carry-forward into Task 19 (product check):** email poll cadence currently
+  fires only off the SMS foreground-service tick (15-min throttle); with no inbound
+  SMS there is no email poll. Verify whether a periodic `JobScheduler`/Alarm tick is
+  needed.
 - **Commit trailer:** the repo's `prepare-commit-msg` hook auto-appends the
   `Co-authored-by: monkeycode-ai <monkeycode-ai@chaitin.com>` trailer. Do NOT add
   it manually in commit messages (it produces duplicates).
