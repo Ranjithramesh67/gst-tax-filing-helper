@@ -109,9 +109,9 @@ export default function SmsGatewayPage() {
       form.id
         ? api.admin.smsProviders.update(form.id, body as UpdateSmsProviderBody)
         : api.admin.smsProviders.create(body as SmsProviderBody),
-    onSuccess: () => {
+    onSuccess: (saved) => {
       void queryClient.invalidateQueries({ queryKey: ['admin', 'sms-providers'] });
-      setForm(EMPTY_FORM);
+      setForm(fromProvider(saved));
       setFormError(null);
     },
   });
@@ -128,6 +128,9 @@ export default function SmsGatewayPage() {
         .map((value) => value.trim())
         .filter(Boolean);
       if (numbers.length === 0) throw new Error('Enter at least one phone number');
+      if (!form.id && !form.apiKey.trim()) {
+        throw new Error('Enter the API key (or save the provider first) before testing');
+      }
       const config: UpdateSmsProviderBody = {
         url: form.url.trim(),
         method: form.method,
@@ -376,6 +379,19 @@ export default function SmsGatewayPage() {
                     Edit
                   </Button>
                   <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setForm(fromProvider(provider));
+                      setReport(null);
+                      window.setTimeout(
+                        () => document.getElementById('sms-test')?.scrollIntoView({ behavior: 'smooth' }),
+                        0,
+                      );
+                    }}
+                  >
+                    <Play className="h-4 w-4" /> Test
+                  </Button>
+                  <Button
                     variant="ghost"
                     disabled={provider.isActive || activate.isPending}
                     onClick={() => activate.mutate(provider.id)}
@@ -390,6 +406,7 @@ export default function SmsGatewayPage() {
       </Card>
 
       <Card className="mt-6">
+        <div id="sms-test" />
         <CardHeader title="Send a test SMS" />
         <div className="space-y-4 px-4 py-5">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -407,8 +424,9 @@ export default function SmsGatewayPage() {
             </Field>
           </div>
           <p className="text-xs text-slate-500">
-            Uses the form values above. Save first if you want to test with the stored credentials
-            without re-entering them.
+            {form.id
+              ? `Testing "${form.name}" using its saved API key.`
+              : 'Enter the API key in the provider form above (or save the provider, then test) before sending.'}
           </p>
           <div className="flex justify-end">
             <Button onClick={() => test.mutate()} disabled={test.isPending}>
