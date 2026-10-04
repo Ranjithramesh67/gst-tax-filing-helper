@@ -2,8 +2,8 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Archive, ShieldOff } from 'lucide-react';
-import type { Client } from '@gstflow/types';
+import { Archive, Link2, ShieldOff } from 'lucide-react';
+import type { Client, LinkStatus } from '@gstflow/types';
 import { api } from '@/lib/api';
 import { useFirmPath } from '@/lib/firm';
 import {
@@ -32,6 +32,20 @@ function formatDateTime(value?: string | null): string {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString();
 }
+
+const LINK_TONE: Record<LinkStatus, 'success' | 'warning' | 'danger' | 'neutral'> = {
+  ACTIVE: 'success',
+  PENDING: 'warning',
+  REJECTED: 'danger',
+  REVOKED: 'neutral',
+};
+
+const LINK_LABEL: Record<LinkStatus, string> = {
+  ACTIVE: 'Linked',
+  PENDING: 'Awaiting confirmation',
+  REJECTED: 'Rejected',
+  REVOKED: 'Revoked',
+};
 
 function formatMoney(value?: number | null): string {
   if (value === null || value === undefined) return '-';
@@ -106,6 +120,22 @@ export default function ClientDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clients', id, 'consents'] });
       queryClient.invalidateQueries({ queryKey: ['clients', id] });
+    },
+  });
+
+  const requestLinkMutation = useMutation({
+    mutationFn: () => api.clients.requestLink(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clients', id] });
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+    },
+  });
+
+  const revokeLinkMutation = useMutation({
+    mutationFn: () => api.clients.revokeLink(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clients', id] });
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
     },
   });
 
@@ -190,6 +220,67 @@ export default function ClientDetailPage() {
           </div>
         </Card>
       </div>
+
+      <Card className="mt-6">
+        <CardHeader
+          title="Party link"
+          action={<Badge tone={LINK_TONE[client.linkStatus]}>{LINK_LABEL[client.linkStatus]}</Badge>}
+        />
+        <div className="space-y-3 p-4 text-sm text-slate-600">
+          <p>
+            {client.linkStatus === 'ACTIVE'
+              ? 'This party confirmed the link. GST SMS from their device is shared with your firm.'
+              : client.linkStatus === 'PENDING'
+                ? `Awaiting confirmation from ${client.phone} in the GSTFlow mobile app. No SMS is shared until they confirm.`
+                : client.linkStatus === 'REJECTED'
+                  ? 'The party declined this link request. No SMS is shared.'
+                  : 'This link was revoked. No SMS is shared.'}
+          </p>
+          <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="flex justify-between gap-4 border-b border-slate-100 py-2">
+              <dt className="text-slate-500">Requested</dt>
+              <dd className="font-medium text-slate-800">{formatDateTime(client.linkRequestedAt)}</dd>
+            </div>
+            <div className="flex justify-between gap-4 border-b border-slate-100 py-2">
+              <dt className="text-slate-500">Confirmed</dt>
+              <dd className="font-medium text-slate-800">{formatDateTime(client.linkConfirmedAt)}</dd>
+            </div>
+            {client.linkNote ? (
+              <div className="flex justify-between gap-4 border-b border-slate-100 py-2 sm:col-span-2">
+                <dt className="text-slate-500">Note</dt>
+                <dd className="font-medium text-slate-800">{client.linkNote}</dd>
+              </div>
+            ) : null}
+          </dl>
+          <div className="flex flex-wrap gap-2">
+            {client.linkStatus !== 'ACTIVE' ? (
+              <Button
+                onClick={() => requestLinkMutation.mutate()}
+                disabled={requestLinkMutation.isPending}
+              >
+                <Link2 className="h-4 w-4" />{' '}
+                {client.linkStatus === 'PENDING' ? 'Resend request' : 'Send link request'}
+              </Button>
+            ) : null}
+            {client.linkStatus === 'ACTIVE' || client.linkStatus === 'PENDING' ? (
+              <Button
+                variant="danger"
+                onClick={() => revokeLinkMutation.mutate()}
+                disabled={revokeLinkMutation.isPending}
+              >
+                <ShieldOff className="h-4 w-4" />{' '}
+                {client.linkStatus === 'ACTIVE' ? 'Unlink party' : 'Cancel request'}
+              </Button>
+            ) : null}
+          </div>
+          {requestLinkMutation.isError ? (
+            <p className="text-red-600">{errorMessage(requestLinkMutation.error)}</p>
+          ) : null}
+          {revokeLinkMutation.isError ? (
+            <p className="text-red-600">{errorMessage(revokeLinkMutation.error)}</p>
+          ) : null}
+        </div>
+      </Card>
 
       <Card className="mt-6">
         <CardHeader title="Dues & payments" />

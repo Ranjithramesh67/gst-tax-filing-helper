@@ -9,6 +9,7 @@ import { ClientsService } from './clients.service';
 import {
   createClientExtendedSchema,
   listClientsQuerySchema,
+  requestClientLinkSchema,
   updateClientSchema,
   type CreateClientDto,
   type ListClientsQueryDto,
@@ -57,6 +58,22 @@ export class ClientsController {
   @RequirePermissions('clients:delete')
   remove(@CurrentUser() actor: Actor, @Param('id') id: string): Promise<{ success: boolean }> {
     return this.clients.archive(actor, id);
+  }
+
+  @Post(':id/link/request')
+  @RequirePermissions('clients:write')
+  requestLink(
+    @CurrentUser() actor: Actor,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(requestClientLinkSchema)) body: { note?: string },
+  ): Promise<Client> {
+    return this.clients.requestLink(actor, id, body.note);
+  }
+
+  @Post(':id/link/revoke')
+  @RequirePermissions('clients:write')
+  revokeLink(@CurrentUser() actor: Actor, @Param('id') id: string): Promise<Client> {
+    return this.clients.revokeLink(actor, id);
   }
 
   @Get(':id/consents')

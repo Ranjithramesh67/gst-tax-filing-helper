@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { Role, OtpPurpose } from '@gstflow/types';
+import { Role, OtpPurpose, LinkStatus } from '@gstflow/types';
 import type { AuthUser, DeviceRegisterBody, OtpVerifyResponse } from '@gstflow/types';
 import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
@@ -165,10 +165,17 @@ export class AuthService {
   async verifyOtp(ctx: VerifyOtpContext): Promise<OtpVerifyResponse> {
     await this.otp.consume(ctx.phone, ctx.code, ctx.purpose);
 
-    const client = await this.prisma.client.findFirst({
+    const clients = await this.prisma.client.findMany({
       where: { phone: ctx.phone, status: { not: 'ARCHIVED' } },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { linkRequestedAt: 'asc' },
     });
+    // A phone number may be linked to several firms. Prefer an already-confirmed
+    // link so SMS can flow immediately; otherwise fall back to the newest
+    // pending request so the party can confirm it right after signing in.
+    const client =
+      clients.find((entry) => entry.linkStatus === LinkStatus.ACTIVE) ??
+      clients.find((entry) => entry.linkStatus === LinkStatus.PENDING) ??
+      clients[0];
     if (!client) {
       throw new UnauthorizedException('No client is registered with this number');
     }
@@ -413,6 +420,12 @@ function serialiseClient(client: {
   stateCode: string | null;
   status: string;
   consentGranted: boolean;
+  linkStatus: string;
+  linkRequestedAt: Date;
+  linkConfirmedAt: Date | null;
+  linkRejectedAt: Date | null;
+  linkRevokedAt: Date | null;
+  linkNote: string | null;
   lastSmsAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -420,6 +433,11 @@ function serialiseClient(client: {
   return {
     ...client,
     status: client.status as never,
+    linkStatus: client.linkStatus as never,
+    linkRequestedAt: client.linkRequestedAt.toISOString(),
+    linkConfirmedAt: client.linkConfirmedAt?.toISOString() ?? null,
+    linkRejectedAt: client.linkRejectedAt?.toISOString() ?? null,
+    linkRevokedAt: client.linkRevokedAt?.toISOString() ?? null,
     lastSmsAt: client.lastSmsAt?.toISOString() ?? null,
     createdAt: client.createdAt.toISOString(),
     updatedAt: client.updatedAt.toISOString(),

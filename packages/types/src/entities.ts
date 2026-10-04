@@ -4,6 +4,7 @@ import {
   DocumentType,
   FilingStatus,
   FirmStatus,
+  LinkStatus,
   PaymentMethod,
   PaymentStatus,
   ReleaseChannel,
@@ -96,10 +97,45 @@ export interface Client {
   stateCode?: string | null;
   status: ClientStatus;
   consentGranted: boolean;
+  /** Mutual-consent link state between the firm and this party. */
+  linkStatus: LinkStatus;
+  linkRequestedAt: string;
+  linkConfirmedAt?: string | null;
+  linkRejectedAt?: string | null;
+  linkRevokedAt?: string | null;
+  linkNote?: string | null;
   lastSmsAt?: string | null;
   createdAt: string;
   updatedAt: string;
   _count?: { smsMessages: number; devices: number; documents: number };
+}
+
+/**
+ * A party-facing view of a firm link request. Returned to the mobile app so the
+ * party can confirm, reject or revoke the link with a firm that added them.
+ */
+export interface ClientLink {
+  id: string;
+  status: LinkStatus;
+  clientName: string;
+  phone: string;
+  gstin?: string | null;
+  requestedAt: string;
+  confirmedAt?: string | null;
+  rejectedAt?: string | null;
+  revokedAt?: string | null;
+  note?: string | null;
+  consentGranted: boolean;
+  lastSmsAt?: string | null;
+  firm: {
+    id: string;
+    name: string;
+    slug: string;
+    logoUrl?: string | null;
+    brandColor?: string | null;
+    supportEmail?: string | null;
+    supportPhone?: string | null;
+  };
 }
 
 export interface Device {

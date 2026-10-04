@@ -4,6 +4,7 @@ import type {
   BillingInvoice,
   BillingInvoiceItem,
   Client,
+  ClientLink,
   ConsentRecord,
   Device,
   Document,
@@ -141,6 +142,12 @@ export function serialiseClient(client: {
   stateCode: string | null;
   status: string;
   consentGranted: boolean;
+  linkStatus: string;
+  linkRequestedAt: Date;
+  linkConfirmedAt: Date | null;
+  linkRejectedAt: Date | null;
+  linkRevokedAt: Date | null;
+  linkNote: string | null;
   lastSmsAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -158,10 +165,56 @@ export function serialiseClient(client: {
     stateCode: client.stateCode,
     status: client.status as Client['status'],
     consentGranted: client.consentGranted,
+    linkStatus: client.linkStatus as Client['linkStatus'],
+    linkRequestedAt: iso(client.linkRequestedAt)!,
+    linkConfirmedAt: iso(client.linkConfirmedAt),
+    linkRejectedAt: iso(client.linkRejectedAt),
+    linkRevokedAt: iso(client.linkRevokedAt),
+    linkNote: client.linkNote,
     lastSmsAt: iso(client.lastSmsAt),
     createdAt: iso(client.createdAt)!,
     updatedAt: iso(client.updatedAt)!,
     ...(client._count ? { _count: client._count } : {}),
+  };
+}
+
+export function serialiseClientLink(row: {
+  id: string;
+  name: string;
+  phone: string;
+  gstin: string | null;
+  consentGranted: boolean;
+  linkStatus: string;
+  linkRequestedAt: Date;
+  linkConfirmedAt: Date | null;
+  linkRejectedAt: Date | null;
+  linkRevokedAt: Date | null;
+  linkNote: string | null;
+  lastSmsAt?: Date | null;
+  firm: {
+    id: string;
+    name: string;
+    slug: string;
+    logoUrl: string | null;
+    brandColor: string | null;
+    supportEmail: string | null;
+    supportPhone: string | null;
+  };
+}): ClientLink {
+  return {
+    id: row.id,
+    status: row.linkStatus as ClientLink['status'],
+    clientName: row.name,
+    phone: row.phone,
+    gstin: row.gstin,
+    requestedAt: iso(row.linkRequestedAt)!,
+    confirmedAt: iso(row.linkConfirmedAt),
+    rejectedAt: iso(row.linkRejectedAt),
+    revokedAt: iso(row.linkRevokedAt),
+    note: row.linkNote,
+    consentGranted: row.consentGranted,
+    lastSmsAt: iso(row.lastSmsAt),
+    firm: row.firm,
   };
 }
 

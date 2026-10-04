@@ -5,6 +5,7 @@ import type {
   BillingInvoice,
   ClassifySmsBody,
   Client,
+  ClientLink,
   ConsentRecord,
   CreateBillingInvoiceBody,
   CreateClientBody,
@@ -63,6 +64,7 @@ import type {
   PermissionCatalog,
   PublicPaymentRequest,
   ReceivablesResponse,
+  RequestLinkBody,
   RoleDefinition,
   SmsIngestBody,
   SmsIngestResponse,
@@ -113,6 +115,17 @@ export class GstFlowApi {
     update: (id: string, body: UpdateClientBody) => this.http.patch<Client>(`/clients/${id}`, body),
     remove: (id: string) => this.http.del<{ success: boolean }>(`/clients/${id}`),
     consents: (id: string) => this.http.get<ConsentRecord[]>(`/clients/${id}/consents`),
+    requestLink: (id: string, body?: RequestLinkBody) =>
+      this.http.post<Client>(`/clients/${id}/link/request`, body ?? {}),
+    revokeLink: (id: string) => this.http.post<Client>(`/clients/${id}/link/revoke`),
+  };
+
+  /** Party (mobile client) self-service link management. */
+  links = {
+    list: () => this.http.get<ClientLink[]>('/client/links'),
+    confirm: (id: string) => this.http.post<ClientLink>(`/client/links/${id}/confirm`),
+    reject: (id: string) => this.http.post<ClientLink>(`/client/links/${id}/reject`),
+    revoke: (id: string) => this.http.post<ClientLink>(`/client/links/${id}/revoke`),
   };
 
   devices = {

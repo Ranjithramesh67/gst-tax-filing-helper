@@ -14,3 +14,7 @@ export const createClientSchema = z.object({
 export const updateClientSchema = createClientSchema.partial().extend({
   status: z.enum(['ACTIVE', 'INACTIVE', 'ARCHIVED']).optional(),
 });
+
+export const requestClientLinkSchema = z.object({
+  note: z.string().trim().max(500).optional(),
+});

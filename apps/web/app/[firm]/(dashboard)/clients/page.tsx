@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search } from 'lucide-react';
-import type { ClientStatus } from '@gstflow/types';
+import type { ClientStatus, LinkStatus } from '@gstflow/types';
 import { ClientStatus as ClientStatusEnum } from '@gstflow/types';
 import { api } from '@/lib/api';
 import { useFirmPath } from '@/lib/firm';
@@ -27,6 +27,20 @@ const STATUS_TONE: Record<ClientStatus, 'success' | 'warning' | 'neutral'> = {
   ACTIVE: 'success',
   INACTIVE: 'warning',
   ARCHIVED: 'neutral',
+};
+
+const LINK_TONE: Record<LinkStatus, 'success' | 'warning' | 'danger' | 'neutral'> = {
+  ACTIVE: 'success',
+  PENDING: 'warning',
+  REJECTED: 'danger',
+  REVOKED: 'neutral',
+};
+
+const LINK_LABEL: Record<LinkStatus, string> = {
+  ACTIVE: 'Linked',
+  PENDING: 'Awaiting',
+  REJECTED: 'Rejected',
+  REVOKED: 'Revoked',
 };
 
 type StatusFilter = 'ALL' | ClientStatus;
@@ -150,6 +164,7 @@ export default function ClientsPage() {
                   <th className="px-4 py-3 font-medium">GSTIN</th>
                   <th className="px-4 py-3 font-medium">Phone</th>
                   <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium">Link</th>
                   <th className="px-4 py-3 font-medium">Consent</th>
                   <th className="px-4 py-3 font-medium">SMS</th>
                 </tr>
@@ -169,6 +184,11 @@ export default function ClientsPage() {
                     <td className="px-4 py-3 text-slate-600">{client.phone}</td>
                     <td className="px-4 py-3">
                       <Badge tone={STATUS_TONE[client.status]}>{client.status}</Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge tone={LINK_TONE[client.linkStatus]}>
+                        {LINK_LABEL[client.linkStatus]}
+                      </Badge>
                     </td>
                     <td className="px-4 py-3">
                       <Badge tone={client.consentGranted ? 'success' : 'neutral'}>

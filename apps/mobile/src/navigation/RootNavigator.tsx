@@ -8,6 +8,7 @@ import OtpScreen from '@/screens/Otp/OtpScreen';
 import HomeScreen from '@/screens/Home/HomeScreen';
 import SmsLogScreen from '@/screens/SmsLog/SmsLogScreen';
 import SettingsScreen from '@/screens/Settings/SettingsScreen';
+import LinksScreen from '@/screens/Links/LinksScreen';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { colors, fontSize, spacing } from '@/theme';
 
@@ -16,6 +17,7 @@ export type RootStackParamList = {
   Otp: { phone?: string } | undefined;
   Home: undefined;
   SmsLog: undefined;
+  Links: undefined;
   Settings: undefined;
 };
 
@@ -39,6 +41,11 @@ function RootNavigatorInner(): React.ReactElement {
         <>
           <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'GSTFlow' }} />
           <Stack.Screen name="SmsLog" component={SmsLogScreen} options={{ title: 'SMS Log' }} />
+          <Stack.Screen
+            name="Links"
+            component={LinksScreen}
+            options={{ title: 'Linked firms' }}
+          />
           <Stack.Screen
             name="Settings"
             component={SettingsScreen}

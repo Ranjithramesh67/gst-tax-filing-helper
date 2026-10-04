@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { ClientStatus, Role } from '@gstflow/types';
+import { ClientStatus, LinkStatus, Role } from '@gstflow/types';
 import type { Client, ConsentRecord, PaginatedClients } from '@gstflow/types';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -35,6 +35,7 @@ export class ClientsService {
     }
 
     if (query.status) where.status = query.status;
+    if (query.linkStatus) where.linkStatus = query.linkStatus as LinkStatus;
     if (query.search) {
       where.OR = [
         { name: { contains: query.search, mode: 'insensitive' } },
@@ -80,6 +81,11 @@ export class ClientsService {
         email: body.email ?? null,
         address: body.address ?? null,
         stateCode: body.stateCode ?? null,
+        // Mutual-consent: a newly added party must confirm from the mobile app
+        // before any data is shared with the firm.
+        linkStatus: LinkStatus.PENDING,
+        linkRequestedAt: new Date(),
+        linkNote: normalise(body.note),
       },
     });
 
@@ -142,6 +148,63 @@ export class ClientsService {
     });
 
     return { success: true };
+  }
+
+  async requestLink(actor: Actor, id: string, note?: string): Promise<Client> {
+    await this.requireClient(actor, id);
+
+    const client = await this.prisma.client.update({
+      where: { id },
+      data: {
+        linkStatus: LinkStatus.PENDING,
+        linkRequestedAt: new Date(),
+        linkConfirmedAt: null,
+        linkRejectedAt: null,
+        linkRevokedAt: null,
+        ...(note !== undefined ? { linkNote: normalise(note) } : {}),
+      },
+    });
+
+    await this.audit.recordAs(actor, {
+      action: 'client.link.request',
+      entity: 'Client',
+      entityId: id,
+      meta: { note: note ?? null },
+    });
+
+    return serialiseClient(client);
+  }
+
+  async revokeLink(actor: Actor, id: string): Promise<Client> {
+    await this.requireClient(actor, id);
+
+    const now = new Date();
+    const [, client] = await this.prisma.$transaction([
+      this.prisma.consentRecord.updateMany({
+        where: { clientId: id, revokedAt: null },
+        data: { revokedAt: now },
+      }),
+      this.prisma.client.update({
+        where: { id },
+        data: {
+          linkStatus: LinkStatus.REVOKED,
+          linkRevokedAt: now,
+          consentGranted: false,
+        },
+      }),
+      this.prisma.device.updateMany({
+        where: { clientId: id, revoked: false },
+        data: { revoked: true },
+      }),
+    ]);
+
+    await this.audit.recordAs(actor, {
+      action: 'client.link.revoke',
+      entity: 'Client',
+      entityId: id,
+    });
+
+    return serialiseClient(client);
   }
 
   async listConsents(actor: Actor, id: string): Promise<ConsentRecord[]> {

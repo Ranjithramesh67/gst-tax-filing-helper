@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { Role } from '@gstflow/types';
+import { LinkStatus, Role } from '@gstflow/types';
 import type {
   ClassifySmsBody,
   PaginatedSms,
@@ -122,26 +122,49 @@ export class SmsService {
     });
     if (!consent) throw new ForbiddenException('Consent is not active');
 
+    const source = await this.prisma.client.findUnique({
+      where: { id: clientId },
+      select: { phone: true },
+    });
+    if (!source) throw new ForbiddenException('No client is associated with this account');
+
+    // Mutual consent: a message is only shared with firms whose link the party
+    // has confirmed. A party linked to several firms has their SMS fanned out to
+    // every ACTIVE link; unconfirmed (PENDING/REJECTED/REVOKED) links get nothing.
+    const targets = await this.prisma.client.findMany({
+      where: {
+        phone: source.phone,
+        status: { not: 'ARCHIVED' },
+        linkStatus: LinkStatus.ACTIVE,
+      },
+      select: { id: true },
+    });
+    if (targets.length === 0) {
+      throw new ForbiddenException('No confirmed firm is linked to this number');
+    }
+    const targetIds = targets.map((target) => target.id);
+
     const deviceIds = [
       ...new Set(
         body.items.map((item) => item.deviceId).filter((id): id is string => Boolean(id)),
       ),
     ];
     // Clients send either the Device id or its hardware androidId. Resolve both
-    // to the canonical Device id so the FK is valid and the ownership check holds.
-    const deviceByKey = new Map<string, string>();
+    // to the canonical Device (and its owning client) so the FK is valid and the
+    // per-firm ownership check holds.
+    const deviceByKey = new Map<string, { id: string; clientId: string }>();
     if (deviceIds.length > 0) {
       const devices = await this.prisma.device.findMany({
         where: {
-          clientId,
+          clientId: { in: targetIds },
           revoked: false,
           OR: [{ id: { in: deviceIds } }, { androidId: { in: deviceIds } }],
         },
-        select: { id: true, androidId: true },
+        select: { id: true, androidId: true, clientId: true },
       });
       for (const device of devices) {
-        deviceByKey.set(device.id, device.id);
-        deviceByKey.set(device.androidId, device.id);
+        deviceByKey.set(device.id, { id: device.id, clientId: device.clientId });
+        deviceByKey.set(device.androidId, { id: device.id, clientId: device.clientId });
       }
     }
 
@@ -152,8 +175,8 @@ export class SmsService {
     const ids: string[] = [];
 
     for (const item of body.items) {
-      const canonicalDeviceId = item.deviceId ? deviceByKey.get(item.deviceId) : undefined;
-      if (item.deviceId && !canonicalDeviceId) {
+      const itemDevice = item.deviceId ? deviceByKey.get(item.deviceId) : undefined;
+      if (item.deviceId && !itemDevice) {
         rejected += 1;
         continue;
       }
@@ -164,35 +187,45 @@ export class SmsService {
         continue;
       }
 
-      try {
-        const created = await this.prisma.smsMessage.create({
-          data: {
-            clientId,
-            deviceId: canonicalDeviceId ?? null,
-            sender: item.sender,
-            bodyEncrypted: this.crypto.encrypt(item.body),
-            receivedAt,
-            category: classifySms(item.body, item.sender),
-            hash: item.hash,
-          },
-        });
-        accepted += 1;
-        ids.push(created.id);
-        if (!lastReceivedAt || receivedAt > lastReceivedAt) lastReceivedAt = receivedAt;
-        await this.persistParsed(created.id, item.body);
-      } catch (error) {
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-          duplicates += 1;
-        } else {
-          this.logger.error(`Failed to ingest SMS: ${String(error)}`);
-          rejected += 1;
+      let createdAny = false;
+      let duplicateOnly = true;
+      for (const targetId of targetIds) {
+        const deviceId = itemDevice && itemDevice.clientId === targetId ? itemDevice.id : null;
+        try {
+          const created = await this.prisma.smsMessage.create({
+            data: {
+              clientId: targetId,
+              deviceId,
+              sender: item.sender,
+              bodyEncrypted: this.crypto.encrypt(item.body),
+              receivedAt,
+              category: classifySms(item.body, item.sender),
+              hash: item.hash,
+            },
+          });
+          createdAny = true;
+          duplicateOnly = false;
+          ids.push(created.id);
+          if (!lastReceivedAt || receivedAt > lastReceivedAt) lastReceivedAt = receivedAt;
+          await this.persistParsed(created.id, item.body);
+        } catch (error) {
+          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+            // Already stored for this firm; not an error.
+          } else {
+            this.logger.error(`Failed to ingest SMS: ${String(error)}`);
+            duplicateOnly = false;
+          }
         }
       }
+
+      if (createdAny) accepted += 1;
+      else if (duplicateOnly) duplicates += 1;
+      else rejected += 1;
     }
 
     if (accepted > 0) {
-      await this.prisma.client.update({
-        where: { id: clientId },
+      await this.prisma.client.updateMany({
+        where: { id: { in: targetIds } },
         data: { lastSmsAt: lastReceivedAt ?? new Date() },
       });
     }
@@ -200,7 +233,7 @@ export class SmsService {
     await this.audit.recordAs(actor, {
       action: 'sms.ingest',
       entity: 'SmsMessage',
-      meta: { accepted, duplicates, rejected },
+      meta: { accepted, duplicates, rejected, firms: targetIds.length },
     });
 
     return { accepted, duplicates, rejected, ids };

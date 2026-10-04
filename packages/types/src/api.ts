@@ -127,6 +127,7 @@ export interface ListQuery {
 
 export interface ListClientsQuery extends ListQuery {
   status?: string;
+  linkStatus?: string;
 }
 
 export interface ListSmsQuery extends ListQuery {
@@ -149,6 +150,11 @@ export interface CreateClientBody {
 
 export interface UpdateClientBody extends Partial<CreateClientBody> {
   status?: Client['status'];
+}
+
+/** Firm-initiated request/refresh of a mutual-consent link with a party. */
+export interface RequestLinkBody {
+  note?: string;
 }
 
 export interface CreateFirmBody {

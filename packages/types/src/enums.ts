@@ -30,6 +30,14 @@ export const ClientStatus = {
 } as const;
 export type ClientStatus = (typeof ClientStatus)[keyof typeof ClientStatus];
 
+export const LinkStatus = {
+  PENDING: 'PENDING',
+  ACTIVE: 'ACTIVE',
+  REJECTED: 'REJECTED',
+  REVOKED: 'REVOKED',
+} as const;
+export type LinkStatus = (typeof LinkStatus)[keyof typeof LinkStatus];
+
 export const DevicePlatform = {
   ANDROID: 'ANDROID',
   IOS: 'IOS',

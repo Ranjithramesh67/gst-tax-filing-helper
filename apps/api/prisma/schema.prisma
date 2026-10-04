@@ -28,6 +28,13 @@ enum ClientStatus {
   ARCHIVED
 }
 
+enum LinkStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+  REVOKED
+}
+
 enum DevicePlatform {
   ANDROID
   IOS
@@ -237,6 +244,12 @@ model Client {
   stateCode      String?
   status         ClientStatus @default(ACTIVE)
   consentGranted Boolean      @default(false)
+  linkStatus       LinkStatus @default(ACTIVE)
+  linkRequestedAt  DateTime   @default(now())
+  linkConfirmedAt  DateTime?
+  linkRejectedAt   DateTime?
+  linkRevokedAt    DateTime?
+  linkNote         String?
   lastSmsAt      DateTime?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
@@ -259,6 +272,7 @@ model Client {
   @@index([firmId, status])
   @@index([gstin])
   @@index([phone])
+  @@index([linkStatus])
 }
 
 model Device {

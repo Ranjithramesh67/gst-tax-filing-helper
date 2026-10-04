@@ -11,7 +11,7 @@ import {
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { AuthUser } from '@gstflow/types';
+import type { AuthUser, ClientLink } from '@gstflow/types';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import {
@@ -69,6 +69,7 @@ export function HomeScreen(): React.ReactElement {
   const [listening, setListening] = useState(true);
   const [queued, setQueued] = useState(0);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
+  const [links, setLinks] = useState<ClientLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [granting, setGranting] = useState(false);
   const [toggling, setToggling] = useState(false);
@@ -76,18 +77,20 @@ export function HomeScreen(): React.ReactElement {
   const [notice, setNotice] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const [storedConsent, permission, count, lastSync, readingEnabled] = await Promise.all([
+    const [storedConsent, permission, count, lastSync, readingEnabled, linkRows] = await Promise.all([
       getStoredConsent(),
       SmsReader.hasSmsPermission(),
       queueSize(),
       AsyncStorage.getItem(LAST_SYNC_STORAGE_KEY),
       getReadingEnabled(),
+      api.links.list().catch(() => [] as ClientLink[]),
     ]);
     setConsent(storedConsent);
     setHasPermission(permission);
     setQueued(count);
     setLastSyncAt(lastSync);
     setListening(readingEnabled);
+    setLinks(linkRows);
   }, []);
 
   useEffect(() => {
@@ -222,6 +225,8 @@ export function HomeScreen(): React.ReactElement {
 
   const displayName = me?.name ?? client?.name ?? 'Client';
   const firmLabel = client?.firmId ?? me?.firmId ?? 'Not available';
+  const activeLinks = links.filter((link) => link.status === 'ACTIVE').length;
+  const pendingLinks = links.filter((link) => link.status === 'PENDING').length;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -237,6 +242,36 @@ export function HomeScreen(): React.ReactElement {
         <InfoRow label="Phone" value={<Text style={styles.infoValue}>{client?.phone ?? '—'}</Text>} />
         <InfoRow label="Firm" value={<Text style={styles.infoValue}>{firmLabel}</Text>} />
         {meError ? <Text style={styles.error}>{meError}</Text> : null}
+      </Card>
+
+      <Card title="Linked firms">
+        <InfoRow
+          label="Confirmed links"
+          value={
+            <Text style={[styles.infoValue, activeLinks > 0 ? styles.valueSuccess : undefined]}>
+              {activeLinks}
+            </Text>
+          }
+        />
+        <InfoRow
+          label="Awaiting your confirmation"
+          value={
+            <Text style={[styles.infoValue, pendingLinks > 0 ? styles.valueDanger : undefined]}>
+              {pendingLinks}
+            </Text>
+          }
+        />
+        <Text style={styles.helper}>
+          A firm can only receive your GST SMS after you confirm the link. Unconfirmed firms see
+          nothing.
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => navigation.navigate('Links')}
+          style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]}
+        >
+          <Text style={styles.primaryButtonText}>Manage linked firms</Text>
+        </Pressable>
       </Card>
 
       <Card title="Consent">
