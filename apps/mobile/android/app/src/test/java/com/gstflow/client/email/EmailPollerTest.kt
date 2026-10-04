@@ -1,10 +1,12 @@
 package com.gstflow.client.email
 
+import android.content.Context
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.mockito.Mockito.mock
 
 /**
  * JVM tests for the poller's account selection, OTP extraction mapping, cursor
@@ -72,11 +74,13 @@ class EmailPollerTest {
         cursor = "9",
     )
 
+    private val context: Context = mock(Context::class.java)
+
     @Test
-    fun connectorForSupportsImapOnlyForNow() {
-        assertTrue(EmailPoller.connectorFor(account()) is ImapConnector)
-        assertNull(EmailPoller.connectorFor(account(provider = EmailProvider.GMAIL)))
-        assertNull(EmailPoller.connectorFor(account(provider = EmailProvider.GRAPH)))
+    fun connectorForSupportsImapAndGmail() {
+        assertTrue(EmailPoller.connectorFor(context, account()) is ImapConnector)
+        assertTrue(EmailPoller.connectorFor(context, account(provider = EmailProvider.GMAIL)) is GmailConnector)
+        assertNull(EmailPoller.connectorFor(context, account(provider = EmailProvider.GRAPH)))
     }
 
     @Test

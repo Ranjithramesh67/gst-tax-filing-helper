@@ -136,10 +136,19 @@ dependencies {
     implementation("com.sun.mail:android-mail:1.6.7")
     implementation("com.sun.mail:android-activation:1.6.7")
 
+    // HTTP client for the Gmail REST connector (OkHttp gives a mockable,
+    // testable call layer instead of raw HttpURLConnection).
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // Google Sign-In + GoogleAuthUtil for the Gmail OAuth link flow (Task 15).
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
+
     // JVM unit tests for pure-Kotlin logic (e.g. OtpExtractor). The real org.json
     // artifact shadows the stubbed android.jar so fixtures can be parsed locally.
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
     // Mocks the abstract javax.mail Folder/Message for ImapConnectorTest (no network).
     testImplementation("org.mockito:mockito-core:5.14.2")
+    // Scripted HTTP server for GmailConnectorTest: no live network is touched.
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
 }

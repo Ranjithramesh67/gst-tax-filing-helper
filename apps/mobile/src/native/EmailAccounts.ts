@@ -87,7 +87,7 @@ export const EmailAccounts = {
     return nativeModule ? nativeModule.setConsent(enabled) : Promise.resolve(false);
   },
 
-  /** Task 15: Gmail OAuth link. Rejects as not implemented for now. */
+  /** Links a Gmail mailbox via Google Sign-In (gmail.readonly). */
   linkGmail(): Promise<EmailMutationResult> {
     return nativeModule ? nativeModule.linkGmail() : Promise.resolve(FAILED);
   },

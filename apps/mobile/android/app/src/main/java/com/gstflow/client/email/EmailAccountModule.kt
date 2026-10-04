@@ -1,5 +1,8 @@
 package com.gstflow.client.email
 
+import android.app.Activity
+import android.content.Intent
+import com.facebook.react.bridge.ActivityEventListener
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.JSONArguments
 import com.facebook.react.bridge.Promise
@@ -40,7 +43,8 @@ internal object EmailAccountValidation {
  *  - removeAccount(id): Promise<{ok:true}>
  *  - setEnabled(id, enabled): Promise<{ok:true}>
  *  - setConsent(enabled): Promise<boolean>   (gates the native poller)
- *  - linkGmail()/linkGraph(): Tasks 15/16, rejected as NOT_IMPLEMENTED here
+ *  - linkGmail(): Promise<{ok:true}>          (launches [GmailLinkActivity])
+ *  - linkGraph(): Task 16, rejected as NOT_IMPLEMENTED here
  *
  * The IMAP password is written straight into [EmailAccounts]'
  * EncryptedSharedPreferences via [EmailAccount.secretRef]; it is never logged
@@ -48,7 +52,14 @@ internal object EmailAccountValidation {
  * `secretRef`/`oauthTokenJson` cannot leak across the bridge.
  */
 class EmailAccountModule(private val reactContext: ReactApplicationContext) :
-    ReactContextBaseJavaModule(reactContext) {
+    ReactContextBaseJavaModule(reactContext), ActivityEventListener {
+
+    /** Set while a Gmail/OAuth link activity is in flight. */
+    private var pendingGmailPromise: Promise? = null
+
+    init {
+        reactContext.addActivityEventListener(this)
+    }
 
     override fun getName(): String = NAME
 
@@ -131,13 +142,55 @@ class EmailAccountModule(private val reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun linkGmail(promise: Promise) {
-        promise.reject("NOT_IMPLEMENTED", "Gmail linking ships in Task 15")
+        reactContext.runOnUiQueueThread {
+            val activity = currentActivity
+            if (activity == null) {
+                promise.reject("NO_ACTIVITY", "No foreground activity to start Gmail linking")
+                return@runOnUiQueueThread
+            }
+            if (pendingGmailPromise != null) {
+                promise.reject("IN_PROGRESS", "A Gmail link is already in progress")
+                return@runOnUiQueueThread
+            }
+            pendingGmailPromise = promise
+            try {
+                activity.startActivityForResult(
+                    Intent(activity, GmailLinkActivity::class.java),
+                    REQUEST_GMAIL_LINK,
+                )
+            } catch (error: Exception) {
+                pendingGmailPromise = null
+                promise.reject("LINK_FAILED", error.message, error)
+            }
+        }
     }
 
     @ReactMethod
     fun linkGraph(promise: Promise) {
         promise.reject("NOT_IMPLEMENTED", "Microsoft Graph linking ships in Task 16")
     }
+
+    override fun onActivityResult(
+        activity: Activity?,
+        requestCode: Int,
+        resultCode: Int,
+        data: Intent?,
+    ) {
+        if (requestCode != REQUEST_GMAIL_LINK) return
+        val promise = pendingGmailPromise ?: return
+        pendingGmailPromise = null
+        if (resultCode == Activity.RESULT_OK) {
+            // The token lives only in the encrypted store; the bridge sees just ok.
+            kickPoll()
+            promise.resolve(okResult())
+        } else {
+            val reason = data?.getStringExtra(GmailLinkActivity.EXTRA_ERROR)
+                ?: "Gmail linking was cancelled"
+            promise.reject("LINK_CANCELLED", reason)
+        }
+    }
+
+    override fun onNewIntent(intent: Intent?) = Unit
 
     private fun kickPoll() {
         Thread { EmailPoller.pollAll(reactContext.applicationContext) }.start()
@@ -147,5 +200,6 @@ class EmailAccountModule(private val reactContext: ReactApplicationContext) :
 
     companion object {
         const val NAME = "EmailAccounts"
+        private const val REQUEST_GMAIL_LINK = 48151
     }
 }

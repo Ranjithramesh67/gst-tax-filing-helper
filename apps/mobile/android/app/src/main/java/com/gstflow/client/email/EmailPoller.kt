@@ -48,7 +48,7 @@ object EmailPoller {
 
         pollAll(
             accounts = accounts,
-            connectorFactory = ::connectorFor,
+            connectorFactory = { account -> connectorFor(context, account) },
             sink = sink,
             upload = { item -> EmailUploader.upload(context, item) },
             onCursor = { id, cursor -> EmailAccounts.setCursor(id, cursor) },
@@ -77,14 +77,19 @@ object EmailPoller {
     }
 
     /**
-     * Selects the connector for an account. Only IMAP is implemented so far;
-     * GMAIL/GRAPH arrive in Tasks 15-16 and are skipped (with a clear log)
-     * rather than failing the whole poll.
+     * Selects the connector for an account. IMAP and Gmail are implemented;
+     * GRAPH arrives in Task 16 and is skipped (with a clear log) rather than
+     * failing the whole poll. The Gmail connector is wired with a token refresher
+     * that re-mints the short-lived access token via [GmailTokens].
      */
-    internal fun connectorFor(account: EmailAccount): EmailConnector? =
+    internal fun connectorFor(context: Context, account: EmailAccount): EmailConnector? =
         when (account.provider) {
             EmailProvider.IMAP -> ImapConnector(account)
-            EmailProvider.GMAIL, EmailProvider.GRAPH -> {
+            EmailProvider.GMAIL -> GmailConnector(
+                account = account,
+                tokenRefresher = { GmailTokens.refresh(context, account) },
+            )
+            EmailProvider.GRAPH -> {
                 Log.i(TAG, "Provider ${account.provider} not implemented yet; skipping ${account.id}")
                 null
             }

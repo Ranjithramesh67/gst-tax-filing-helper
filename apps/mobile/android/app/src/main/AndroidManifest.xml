@@ -32,6 +32,14 @@
             </intent-filter>
         </activity>
 
+        <!-- Transparent Google Sign-In host for linking a Gmail mailbox. -->
+        <activity
+            android:name=".email.GmailLinkActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <!-- Only the system telephony stack may deliver SMS_RECEIVED. -->
         <receiver
             android:name=".sms.SmsBroadcastReceiver"
