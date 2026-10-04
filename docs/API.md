@@ -159,6 +159,25 @@ Notes: a super admin without a firm receives `400`; every update writes a
 | POST | `/admin/releases` | `SUPER_ADMIN` | `platform`, `version`, `versionCode`, `channel`, `url`, `checksum?`, `changelog?`, `mandatory?` | `AppRelease` |
 | GET | `/admin/audit` | `SUPER_ADMIN`, `FIRM_ADMIN`, `FILER` | query: `page?`, `pageSize?`, `firmId?` (super admin), `action?`, `entity?`, `from?`, `to?` | `Paginated<AuditLog>` |
 
+## Notifications
+
+In-app feed and deadline reminders. Scoped to the actor: staff see firm-wide rows
+plus rows addressed to them; a party (`CLIENT`) sees only rows addressed to them.
+
+| Method | Path | Auth | Key request fields | Response |
+|---|---|---|---|---|
+| GET | `/notifications` | any bearer | query: `unreadOnly?`, `page?`, `pageSize?` | `Paginated<AppNotification>` |
+| GET | `/notifications/unread-count` | any bearer | - | `{ count }` |
+| POST | `/notifications/:id/read` | any bearer | - | `AppNotification` (404 if out of scope) |
+| POST | `/notifications/read-all` | any bearer | - | `{ updated }` |
+| POST | `/reminders/run` | `SUPER_ADMIN` | - | `{ created }` |
+
+Notes: the reminder generator scans open returns with a due date and creates one
+notification per bucket (`RETURN_DUE_7D`, `RETURN_DUE_3D`, `RETURN_DUE_1D`,
+`RETURN_OVERDUE`), deduplicated by `(firmId, dedupeKey)`. It runs on boot and every
+`REMINDER_INTERVAL_MS` (default 6h); set `REMINDERS_ENABLED=false` to disable, and
+`NOTIFY_WEBHOOK_URL` to also POST new notifications to a webhook.
+
 ## Enums
 
 - `Role`: `SUPER_ADMIN`, `FIRM_ADMIN`, `FILER`, `CLIENT`

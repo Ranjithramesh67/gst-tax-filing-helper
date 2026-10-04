@@ -9,6 +9,7 @@ import HomeScreen from '@/screens/Home/HomeScreen';
 import SmsLogScreen from '@/screens/SmsLog/SmsLogScreen';
 import SettingsScreen from '@/screens/Settings/SettingsScreen';
 import LinksScreen from '@/screens/Links/LinksScreen';
+import NotificationsScreen from '@/screens/Notifications/NotificationsScreen';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { colors, fontSize, spacing } from '@/theme';
 
@@ -18,6 +19,7 @@ export type RootStackParamList = {
   Home: undefined;
   SmsLog: undefined;
   Links: undefined;
+  Notifications: undefined;
   Settings: undefined;
 };
 
@@ -45,6 +47,11 @@ function RootNavigatorInner(): React.ReactElement {
             name="Links"
             component={LinksScreen}
             options={{ title: 'Linked firms' }}
+          />
+          <Stack.Screen
+            name="Notifications"
+            component={NotificationsScreen}
+            options={{ title: 'Notifications' }}
           />
           <Stack.Screen
             name="Settings"

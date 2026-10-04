@@ -429,6 +429,28 @@ export interface AuditLog {
   createdAt: string;
 }
 
+export type NotificationType =
+  | 'RETURN_DUE_7D'
+  | 'RETURN_DUE_3D'
+  | 'RETURN_DUE_1D'
+  | 'RETURN_OVERDUE'
+  | 'SYSTEM';
+
+export interface AppNotification {
+  id: string;
+  firmId: string;
+  userId?: string | null;
+  clientId?: string | null;
+  type: NotificationType | string;
+  title: string;
+  body: string;
+  entity?: string | null;
+  entityId?: string | null;
+  meta?: Record<string, unknown> | null;
+  readAt?: string | null;
+  createdAt: string;
+}
+
 export interface Paginated<T> {
   items: T[];
   total: number;

@@ -274,6 +274,19 @@ export function HomeScreen(): React.ReactElement {
         </Pressable>
       </Card>
 
+      <Card title="Notifications">
+        <Text style={styles.helper}>
+          Deadline reminders and updates about your linked firms appear here.
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => navigation.navigate('Notifications')}
+          style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]}
+        >
+          <Text style={styles.primaryButtonText}>View notifications</Text>
+        </Pressable>
+      </Card>
+
       <Card title="Consent">
         <InfoRow
           label="Status"

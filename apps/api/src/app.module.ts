@@ -20,6 +20,7 @@ import { BillingModule } from './billing/billing.module';
 import { RbacModule } from './rbac/rbac.module';
 import { LinksModule } from './links/links.module';
 import { FirmModule } from './firm/firm.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
@@ -49,6 +50,7 @@ import { JwtModule } from './common/jwt/jwt.module';
     RbacModule,
     LinksModule,
     FirmModule,
+    NotificationsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

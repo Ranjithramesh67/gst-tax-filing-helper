@@ -1,4 +1,5 @@
 import type {
+  AppNotification,
   AppRelease,
   AuthResponse,
   AuthUser,
@@ -32,6 +33,7 @@ import type {
   Invoice,
   ListBillingInvoicesQuery,
   ListClientsQuery,
+  ListNotificationsQuery,
   ListPaymentRequestsQuery,
   ListPaymentsQuery,
   ListQuery,
@@ -50,6 +52,7 @@ import type {
   PaginatedFilings,
   PaginatedFirms,
   PaginatedInvoices,
+  PaginatedNotifications,
   PaginatedPayments,
   PaginatedReleases,
   PaginatedReturns,
@@ -70,6 +73,7 @@ import type {
   SmsIngestResponse,
   SmsMessage,
   Subscription,
+  UnreadCountResponse,
   UpdateBillingInvoiceBody,
   UpdateClientBody,
   UpdateFilingBody,
@@ -141,6 +145,19 @@ export class GstFlowApi {
     get: (id: string) => this.http.get<SmsMessage>(`/sms/${id}`),
     classify: (id: string, body: ClassifySmsBody) =>
       this.http.post<SmsMessage>(`/sms/${id}/classify`, body),
+  };
+
+  notifications = {
+    list: (query?: ListNotificationsQuery) =>
+      this.http.get<PaginatedNotifications>('/notifications', query),
+    unreadCount: () => this.http.get<UnreadCountResponse>('/notifications/unread-count'),
+    markRead: (id: string) =>
+      this.http.post<AppNotification>(`/notifications/${id}/read`),
+    markAllRead: () => this.http.post<{ updated: number }>('/notifications/read-all'),
+  };
+
+  reminders = {
+    run: () => this.http.post<{ created: number }>('/reminders/run'),
   };
 
   documents = {

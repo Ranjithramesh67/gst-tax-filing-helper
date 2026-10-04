@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import {
+  Bell,
   CalendarClock,
   FileText,
   LayoutDashboard,
@@ -20,6 +21,7 @@ import {
 import { useAuth } from '@/lib/auth';
 import { useFirmBranding, useFirmPath } from '@/lib/firm';
 import { cn } from '@/components/ui';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
 
 const NAV: Array<{
   href: string;
@@ -28,6 +30,7 @@ const NAV: Array<{
   permission?: string;
 }> = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/notifications', label: 'Notifications', icon: Bell },
   { href: '/clients', label: 'Clients', icon: Users },
   { href: '/sms', label: 'SMS Inbox', icon: Mail },
   { href: '/documents', label: 'Documents', icon: Paperclip },
@@ -102,12 +105,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="text-sm text-slate-500">
             {user.name} &middot; {user.roleName ?? user.role}
           </div>
-          <button
-            onClick={logout}
-            className="inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
-          >
-            <LogOut className="h-4 w-4" /> Sign out
-          </button>
+          <div className="flex items-center gap-1">
+            <NotificationBell />
+            <button
+              onClick={logout}
+              className="inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
+            >
+              <LogOut className="h-4 w-4" /> Sign out
+            </button>
+          </div>
         </header>
         <main className="flex-1 px-6 py-6">{children}</main>
       </div>

@@ -1,5 +1,6 @@
 import { PaymentMethod, PaymentStatus, Role, RoleScope } from './enums';
 import type {
+  AppNotification,
   AppRelease,
   AuditLog,
   BillingCycle,
@@ -136,6 +137,14 @@ export interface ListSmsQuery extends ListQuery {
   status?: string;
   from?: string;
   to?: string;
+}
+
+export interface ListNotificationsQuery extends ListQuery {
+  unreadOnly?: boolean;
+}
+
+export interface UnreadCountResponse {
+  count: number;
 }
 
 export interface CreateClientBody {
@@ -431,6 +440,7 @@ export type PaginatedUsers = Paginated<User>;
 export type PaginatedReleases = Paginated<AppRelease>;
 export type PaginatedRoles = Paginated<RoleDefinition>;
 export type PaginatedTeam = Paginated<User>;
+export type PaginatedNotifications = Paginated<AppNotification>;
 
 export interface ApiErrorBody {
   statusCode: number;

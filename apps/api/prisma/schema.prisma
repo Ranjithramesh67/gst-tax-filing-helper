@@ -610,3 +610,23 @@ model PaymentRequest {
   @@index([clientId])
   @@index([providerRef])
 }
+
+model Notification {
+  id        String    @id @default(cuid())
+  firmId    String
+  userId    String?
+  clientId  String?
+  type      String
+  title     String
+  body      String
+  entity    String?
+  entityId  String?
+  meta      Json?
+  dedupeKey String
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@unique([firmId, dedupeKey])
+  @@index([firmId, readAt])
+  @@index([clientId, readAt])
+}

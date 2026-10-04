@@ -1,4 +1,5 @@
 import type {
+  AppNotification,
   AppRelease,
   AuditLog,
   BillingInvoice,
@@ -66,6 +67,36 @@ export function serialiseFirm(firm: {
     createdAt: iso(firm.createdAt)!,
     updatedAt: iso(firm.updatedAt)!,
     ...(firm._count ? { _count: firm._count } : {}),
+  };
+}
+
+export function serialiseNotification(notification: {
+  id: string;
+  firmId: string;
+  userId: string | null;
+  clientId: string | null;
+  type: string;
+  title: string;
+  body: string;
+  entity: string | null;
+  entityId: string | null;
+  meta: unknown;
+  readAt: Date | null;
+  createdAt: Date;
+}): AppNotification {
+  return {
+    id: notification.id,
+    firmId: notification.firmId,
+    userId: notification.userId,
+    clientId: notification.clientId,
+    type: notification.type,
+    title: notification.title,
+    body: notification.body,
+    entity: notification.entity,
+    entityId: notification.entityId,
+    meta: (notification.meta ?? null) as Record<string, unknown> | null,
+    readAt: iso(notification.readAt),
+    createdAt: iso(notification.createdAt)!,
   };
 }
 
