@@ -143,7 +143,50 @@ class ImapConnectorTest {
     }
 
     @Test
-    fun returnsNewestUidFirstAndCapsAtFifty() {
+    fun fallsBackToHtmlWhenMultipartHasNoPlainText() {
+        val html = mock(BodyPart::class.java)
+        Mockito.`when`(html.contentType).thenReturn("text/html; charset=UTF-8")
+        Mockito.`when`(html.content).thenReturn("<html><body>Your <b>OTP</b> is&nbsp;123456</body></html>")
+        val multipart = mock(Multipart::class.java)
+        Mockito.`when`(multipart.count).thenReturn(1)
+        Mockito.`when`(multipart.getBodyPart(0)).thenReturn(html)
+        val folder = imapFolder(message(uid = 3, body = multipart) to 3L)
+
+        val body = connector.collect(folder, null).single().snippetBody
+
+        assertTrue("HTML-only multipart should still yield a snippet", body.isNotEmpty())
+        assertFalse(body.contains("<"))
+        assertEquals("Your OTP is 123456", body)
+    }
+
+    @Test
+    fun interfaceDefaultNewCursorComputesMaxCursor() {
+        val generic = object : EmailConnector {
+            override fun id() = "generic"
+            override fun listOtpCandidates(since: String?) = emptyList<RawMail>()
+        }
+        val mails = listOf(
+            RawMail("m1", "a@b.com", "s", "b", 0L, cursor = "5"),
+            RawMail("m2", "a@b.com", "s", "b", 0L, cursor = "12"),
+            RawMail("m3", "a@b.com", "s", "b", 0L, cursor = null),
+        )
+
+        assertEquals("12", generic.newCursor(mails))
+        assertNull(generic.newCursor(emptyList()))
+    }
+
+    @Test(expected = IllegalStateException::class)
+    fun blankImapHostFailsFastBeforeConnect() {
+        ImapConnector(account.copy(imapHost = " ")).listOtpCandidates(null)
+    }
+
+    @Test(expected = IllegalStateException::class)
+    fun blankPasswordFailsFastBeforeConnect() {
+        ImapConnector(account.copy(secretRef = " ")).listOtpCandidates(null)
+    }
+
+    @Test
+    fun returnsOldestUidFirstAndCapsAtFifty() {
         val entries = (1..55).map { uid ->
             message(uid = uid.toLong(), receivedAt = 1_700_000_000_000L + uid) to uid.toLong()
         }
@@ -152,8 +195,27 @@ class ImapConnectorTest {
         val result = connector.collect(folder, null)
 
         assertEquals(ImapConnector.MAX_MESSAGES, result.size)
-        assertEquals("55", result.first().cursor)
-        assertEquals("6", result.last().cursor)
+        assertEquals("1", result.first().cursor)
+        assertEquals("50", result.last().cursor)
+    }
+
+    @Test
+    fun backlogLargerThanCapDrainsAcrossPollsWithoutLoss() {
+        val entries = (1..60).map { uid ->
+            message(uid = uid.toLong(), receivedAt = 1_700_000_000_000L + uid * 1_000L) to uid.toLong()
+        }
+        val folder = imapFolder(*entries.toTypedArray())
+
+        val collected = mutableListOf<String>()
+        var cursor: String? = null
+        repeat(3) {
+            val batch = connector.collect(folder, cursor)
+            if (batch.isEmpty()) return
+            collected += batch.mapNotNull { it.cursor }
+            cursor = connector.newCursor(batch)
+        }
+
+        assertEquals((1L..60L).map { it.toString() }, collected)
     }
 
     @Test

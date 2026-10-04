@@ -19,8 +19,10 @@ import javax.mail.search.ReceivedDateTerm
  * IMAP implementation of [EmailConnector].
  *
  * Connects over SSL (`imaps`, default port 993), opens `INBOX` READ-ONLY, and
- * searches for messages received `SINCE` the cursor date. Only the ~50 newest
- * messages are mapped, and each one carries its IMAP UID in [RawMail.cursor].
+ * searches for messages received `SINCE` the cursor date. Up to [MAX_MESSAGES]
+ * are mapped per poll, oldest-UID-first, and each one carries its IMAP UID in
+ * [RawMail.cursor]. A backlog larger than [MAX_MESSAGES] therefore drains over
+ * successive polls instead of being truncated (and silently skipped).
  *
  * ### Cursor format (important for Task 12)
  * The account cursor is an opaque, composite token:
@@ -97,18 +99,22 @@ class ImapConnector(private val account: EmailAccount) : EmailConnector {
         return found
             .map { message -> UidMessage(message, uidFolder.readUid(message)) }
             .filter { record -> cursorUid == null || record.uid > cursorUid }
-            .sortedWith(compareByDescending<UidMessage> { it.uid }.thenByDescending { it.receivedAt })
+            .sortedWith(compareBy<UidMessage> { it.uid }.thenBy { it.receivedAt })
             .take(MAX_MESSAGES)
             .map { record -> toRawMail(record.message, record.uid) }
     }
 
     /**
      * Cursor to persist after a poll returned [mails]: `yyyy-MM-dd#<maxUid>`, or
-     * null when the batch is empty (leave the stored cursor unchanged). Messages
-     * from [collect] are returned newest-UID-first, so the batch maximum is also
-     * the global maximum for the search window.
+     * null when the batch is empty (leave the stored cursor unchanged).
+     *
+     * [collect] returns the batch oldest-UID-first and the cursor advances to the
+     * max UID *processed*, so a backlog larger than [MAX_MESSAGES] drains across
+     * successive polls without skipping: the next search re-runs from the same
+     * `SINCE` date and the `uid > cursorUid` filter drops only what was already
+     * handled.
      */
-    fun newCursor(mails: List<RawMail>): String? {
+    override fun newCursor(mails: List<RawMail>): String? {
         val maxUid = mails.mapNotNull { it.cursor?.toLongOrNull() }.maxOrNull() ?: return null
         val maxReceivedAt = mails.maxOfOrNull { it.receivedAt } ?: System.currentTimeMillis()
         return "${formatDate(Date(maxReceivedAt))}#$maxUid"
@@ -176,22 +182,34 @@ class ImapConnector(private val account: EmailAccount) : EmailConnector {
         }
     }.getOrDefault("")
 
+    /**
+     * Flattens a multipart body. Prefers any `text/plain` content found anywhere
+     * in the tree; when the message is `text/html`-only (common for OTP mail sent
+     * as `multipart/alternative`), the HTML parts are returned instead and are
+     * tag-stripped downstream by [stripHtml].
+     */
     private fun multipartText(multipart: Multipart, depth: Int): String {
         if (depth > MAX_MULTIPART_DEPTH) return ""
-        val out = StringBuilder()
+        val plain = StringBuilder()
+        val html = StringBuilder()
         for (index in 0 until multipart.count) {
             val part: BodyPart = runCatching { multipart.getBodyPart(index) }.getOrNull() ?: continue
             val partContent = runCatching { part.content }.getOrNull() ?: continue
             when {
-                partContent is Multipart -> out.append(multipartText(partContent, depth + 1))
-                part.isPlainText() -> out.append(partContent as? String ?: "")
+                partContent is Multipart -> plain.append(multipartText(partContent, depth + 1))
+                part.isPlainText() -> plain.append(partContent as? String ?: "")
+                part.isHtml() -> html.append(partContent as? String ?: "")
             }
         }
-        return out.toString()
+        return if (plain.isNotBlank()) plain.toString() else html.toString()
     }
 
-    private fun BodyPart.isPlainText(): Boolean =
-        runCatching { contentType?.lowercase(Locale.US)?.startsWith("text/plain") == true }.getOrDefault(false)
+    private fun BodyPart.isPlainText(): Boolean = hasContentType("text/plain")
+
+    private fun BodyPart.isHtml(): Boolean = hasContentType("text/html")
+
+    private fun BodyPart.hasContentType(prefix: String): Boolean =
+        runCatching { contentType?.lowercase(Locale.US)?.startsWith(prefix) == true }.getOrDefault(false)
 
     private fun stripHtml(raw: String): String {
         val withoutBlocks = BLOCK_ELEMENT.replace(raw, " ")

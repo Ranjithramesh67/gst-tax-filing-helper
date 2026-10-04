@@ -37,4 +37,24 @@ interface EmailConnector {
      * or unparseable value means "start from the connector's default lookback".
      */
     fun listOtpCandidates(since: String?): List<RawMail>
+
+    /**
+     * Cursor to persist after a poll returned [mails], or null when there is
+     * nothing to advance to (leave the stored cursor unchanged). Kept on the
+     * interface so a generic poller can round-trip the cursor without casting to
+     * a concrete connector. The default returns the numeric maximum
+     * [RawMail.cursor] when every cursor parses as a number, otherwise the
+     * lexicographic maximum; connectors with richer cursor semantics (e.g. IMAP's
+     * `yyyy-MM-dd#uid`) override this.
+     */
+    fun newCursor(mails: List<RawMail>): String? {
+        val cursors = mails.mapNotNull { it.cursor }
+        if (cursors.isEmpty()) return null
+        val numeric = cursors.mapNotNull { it.toLongOrNull() }
+        return if (numeric.size == cursors.size) {
+            numeric.maxOrNull()?.toString()
+        } else {
+            cursors.maxOrNull()
+        }
+    }
 }
