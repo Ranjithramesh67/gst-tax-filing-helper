@@ -31,6 +31,7 @@ import type {
   FirmPermissionsResponse,
   FirmRolesResponse,
   GstReturn,
+  InboxGroupDetail,
   Invoice,
   ListBillingInvoicesQuery,
   ListClientsQuery,
@@ -176,6 +177,7 @@ export class GstFlowApi {
 
   inbox = {
     list: (query?: ListInboxQuery) => this.http.get<PaginatedInbox>('/inbox', query),
+    get: (id: string) => this.http.get<InboxGroupDetail>(`/inbox/${id}`),
   };
 
   notifications = {

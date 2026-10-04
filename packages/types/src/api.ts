@@ -172,6 +172,8 @@ export interface ListInboxQuery extends ListQuery {
   clientId?: string;
   /** Applies to raw SMS rows only; OTP groups are always returned. */
   category?: string;
+  /** Applies to raw SMS rows only; OTP groups are always returned. */
+  status?: string;
   search?: string;
   from?: string;
   to?: string;
@@ -204,6 +206,27 @@ export interface PaginatedInbox {
   page: number;
   pageSize: number;
   totalPages: number;
+}
+
+/**
+ * A single underlying event of an OTP group. The snippet is already masked, so
+ * the raw code never leaks through the detail view.
+ */
+export interface InboxOtpEvent {
+  id: string;
+  source: OtpSource;
+  from: string | null;
+  subject: string | null;
+  snippet: string | null;
+  receivedAt: string;
+}
+
+/** Detail payload for one OTP group (`GET /inbox/:id`). */
+export interface InboxGroupDetail {
+  id: string;
+  code: string;
+  client: { id: string; name: string };
+  events: InboxOtpEvent[];
 }
 
 export interface ListNotificationsQuery extends ListQuery {
