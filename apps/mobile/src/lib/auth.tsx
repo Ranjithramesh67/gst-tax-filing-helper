@@ -94,12 +94,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
   }, [emailConsent, loading]);
 
   const setEmailConsent = useCallback(async (enabled: boolean) => {
-    await persistEmailConsent(enabled);
+    // Native is the source of truth: call it first and only reflect the change
+    // in JS state / persisted storage once it resolves. If the bridge rejects,
+    // keep the previous state so JS can never believe consent is ON while the
+    // native poller is still OFF.
     try {
       await EmailAccounts.setConsent(enabled);
-    } catch {
-      void 0;
+    } catch (error) {
+      console.error('[auth] failed to set native email consent', error);
+      throw error;
     }
+    await persistEmailConsent(enabled);
     setEmailConsentState(enabled);
   }, []);
 
@@ -152,6 +157,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
     try {
       await SmsReader.setConsent(false);
       await SmsReader.stopListening();
+    } catch {
+      void 0;
+    }
+    // Reset native email consent in its own try so an unrelated SMS failure
+    // above cannot leave the native poller enabled after sign-out.
+    try {
       await EmailAccounts.setConsent(false);
     } catch {
       void 0;

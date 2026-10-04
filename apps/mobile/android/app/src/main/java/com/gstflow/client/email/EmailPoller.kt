@@ -32,7 +32,8 @@ object EmailPoller {
         // Email reading is off by default. Nothing may be read (or uploaded)
         // until the user has granted consent, which JS mirrors into sync prefs
         // via EmailAccountModule.setConsent(true).
-        if (!EmailAccounts.isConsentGranted(context)) {
+        val consentGranted = EmailAccounts.isConsentGranted(context)
+        if (!consentGranted) {
             Log.i(TAG, "Email-reading consent not granted; skipping poll")
             return
         }
@@ -52,6 +53,7 @@ object EmailPoller {
             upload = { item -> EmailUploader.upload(context, item) },
             onCursor = { id, cursor -> EmailAccounts.setCursor(id, cursor) },
             onStatus = { id, at, error -> EmailAccounts.markStatus(id, at, error) },
+            consentGranted = consentGranted,
         )
 
         // A failed upload leaves the item in the outbox; schedule the durable
@@ -92,8 +94,9 @@ object EmailPoller {
      * Pure orchestration over a list of accounts. Skipped accounts are disabled,
      * have no connector (provider not implemented), or email consent is off
      * ([consentGranted] = false), in which case nothing is read or uploaded.
-     * Returns true when at least one extracted OTP failed to upload, so the
-     * caller should retry.
+     * [consentGranted] is required (no fail-open default): callers must pass the
+     * result of the native consent check. Returns true when at least one
+     * extracted OTP failed to upload, so the caller should retry.
      */
     internal fun pollAll(
         accounts: List<EmailAccount>,
@@ -102,7 +105,7 @@ object EmailPoller {
         upload: (EmailOtp) -> Boolean,
         onCursor: (String, String) -> Unit,
         onStatus: (String, Long?, String?) -> Unit,
-        consentGranted: Boolean = true,
+        consentGranted: Boolean,
     ): Boolean {
         // The consent gate lives here too so the pure orchestration is testable
         // without Android: with consent off no account is ever read or uploaded.

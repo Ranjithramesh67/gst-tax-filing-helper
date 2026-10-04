@@ -101,6 +101,7 @@ class EmailPollerTest {
             upload = { item -> uploaded.add(item.accountId); true },
             onCursor = { id, cursor -> cursors[id] = cursor },
             onStatus = { id, _, error -> statuses[id] = error },
+            consentGranted = true,
         )
 
         // Disabled accounts never reach the factory; unsupported providers reach
@@ -119,7 +120,9 @@ class EmailPollerTest {
         val connector = FakeConnector(emptyList())
         val acc = account(cursor = "2026-09-30#42")
 
-        EmailPoller.pollAll(listOf(acc), { connector }, sink, { true }, { _, _ -> }, { _, _, _ -> })
+        EmailPoller.pollAll(
+            listOf(acc), { connector }, sink, { true }, { _, _ -> }, { _, _, _ -> }, true,
+        )
 
         assertEquals(listOf("2026-09-30#42"), connector.sinceArgs)
     }
@@ -136,6 +139,7 @@ class EmailPollerTest {
             { item -> uploaded.add(item); false },
             { _, _ -> },
             { _, _, _ -> },
+            true,
         )
 
         // Upload is made to fail so the mapped item is observable in the outbox.
@@ -155,7 +159,9 @@ class EmailPollerTest {
     fun skipsMailWithoutAnOtp() {
         val connector = FakeConnector(listOf(mail(body = "Your order shipped today")))
 
-        EmailPoller.pollAll(listOf(account()), { connector }, sink, { true }, { _, _ -> }, { _, _, _ -> })
+        EmailPoller.pollAll(
+            listOf(account()), { connector }, sink, { true }, { _, _ -> }, { _, _, _ -> }, true,
+        )
 
         assertEquals(0, sink.size())
     }
@@ -171,6 +177,7 @@ class EmailPollerTest {
             { false },
             { _, _ -> },
             { _, _, _ -> },
+            true,
         )
 
         assertTrue(needsRetry)
@@ -189,6 +196,7 @@ class EmailPollerTest {
             { item -> uploaded.add(item.sourceRef); true },
             { _, _ -> },
             { _, _, _ -> },
+            true,
         )
 
         assertFalse(needsRetry)
@@ -209,6 +217,7 @@ class EmailPollerTest {
             { true },
             { _, cursor -> cursors.add(cursor) },
             { _, at, error -> statuses.add(at to error) },
+            true,
         )
 
         assertFalse(needsRetry)
@@ -229,6 +238,7 @@ class EmailPollerTest {
             { true },
             { _, cursor -> cursors.add(cursor) },
             { _, _, _ -> },
+            true,
         )
 
         assertTrue(cursors.isEmpty())
