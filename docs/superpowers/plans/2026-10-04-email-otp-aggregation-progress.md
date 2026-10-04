@@ -26,7 +26,7 @@ Execution mode: subagent-driven-development
 | 2 | Prisma `OtpEvent` model + shared types | done (review clean) | `9df0791`, `aacd928` |
 | 3 | Extract OTPs from SMS on ingest + backfill | done (review clean after fix) | `1f7e909`, `9a924e6`, `bef1212` |
 | 4 | `POST /otp/ingest` + validation | done (review clean after fix) | `4b94840`, `666289f`, `22f7293`, `d8fb642`, `d602e1d` |
-| 5 | `GET /inbox` unified feed | done | `36e6cae`, `32fd672`, `627fe7d` |
+| 5 | `GET /inbox` unified feed | done (review clean after correction) | `36e6cae`, `32fd672`, `627fe7d`, `61b1fc2` |
 | 6 | Admin OTP settings | pending | - |
 | 7 | Firm web `/sms` OTP card | pending | - |
 | 8 | Server e2e for grouping + inbox | pending | - |
@@ -52,6 +52,11 @@ Execution mode: subagent-driven-development
   `OtpModule`, so `AppModule` needed no change. `listFeed` scopes OTP events by
   `firmId`+`clientId`, dedupes SMS referenced by `OtpEvent.sourceRef`, and caps the
   in-memory over-fetch at 500 rows per source.
+- **SMS-body privacy boundary (Task 5 correction):** the spec's "full body never
+  uploaded/stored" rule is **EMAIL-only**. `kind:'SMS'` in `/inbox` uses the
+  existing `SmsMessage` shape via `serialiseSms` (full decrypted body), byte-parity
+  with `/sms`; only OTP/email `snippet` is masked. Do not re-introduce SMS body
+  truncation.
 - **Task 8 coverage:** `apps/api/test/otp-inbox.e2e-spec.ts` (committed under Task 5)
   already exercises SMS+EMAIL grouping, cross-client isolation, unauthenticated 401
   and firm-token 403, so Task 8's e2e is effectively satisfied.
