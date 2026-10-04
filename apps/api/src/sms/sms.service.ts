@@ -12,6 +12,7 @@ import type {
 import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { AuditService } from '../common/audit/audit.service';
+import { FilingsService } from '../filings/filings.service';
 import { paginate, parsePagination } from '../common/pagination';
 import { serialiseSms } from '../common/serializers';
 import type { Actor } from '../common/auth/actor.types';
@@ -46,7 +47,12 @@ function hasParsedField(parsed: ReturnType<typeof parseGstSms>): boolean {
     parsed.taxableValue != null ||
     parsed.taxAmount != null ||
     parsed.hsn != null ||
-    parsed.dueDate != null
+    parsed.dueDate != null ||
+    parsed.returnType != null ||
+    parsed.period != null ||
+    parsed.arn != null ||
+    parsed.lateFee != null ||
+    parsed.filed
   );
 }
 
@@ -59,6 +65,11 @@ function parsedToJson(parsed: ReturnType<typeof parseGstSms>): Prisma.InputJsonV
     taxAmount: parsed.taxAmount,
     hsn: parsed.hsn,
     dueDate: parsed.dueDate ? parsed.dueDate.toISOString() : null,
+    returnType: parsed.returnType,
+    period: parsed.period,
+    arn: parsed.arn,
+    lateFee: parsed.lateFee,
+    filed: parsed.filed,
     confidence: parsed.confidence,
   };
 }
@@ -71,6 +82,7 @@ export class SmsService {
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
     private readonly audit: AuditService,
+    private readonly filings: FilingsService,
   ) {}
 
   private scope(actor: Actor): Prisma.SmsMessageWhereInput {
@@ -104,10 +116,39 @@ export class SmsService {
         taxAmount: parsed.taxAmount,
         hsn: parsed.hsn,
         dueDate: parsed.dueDate,
+        returnType: parsed.returnType,
+        period: parsed.period,
+        arn: parsed.arn,
+        lateFee: parsed.lateFee,
+        filed: parsed.filed,
         confidence: parsed.confidence,
         rawJson: parsedToJson(parsed),
       },
     });
+  }
+
+  // A filed GSTN acknowledgement SMS (ARN + return type + period) reconciles the
+  // matching open return for that client. Failures here must never fail ingest.
+  private async reconcileFiling(
+    smsMessageId: string,
+    clientId: string,
+    rawBody: string,
+    receivedAt: Date,
+  ): Promise<void> {
+    const parsed = parseGstSms(rawBody);
+    if (!parsed.filed || !parsed.arn || !parsed.returnType || !parsed.period) return;
+    try {
+      await this.filings.applyFiledReturnFromSms({
+        clientId,
+        returnType: parsed.returnType,
+        period: parsed.period,
+        referenceNo: parsed.arn,
+        smsMessageId,
+        filedAt: receivedAt,
+      });
+    } catch (error) {
+      this.logger.warn(`Failed to reconcile filing from SMS: ${String(error)}`);
+    }
   }
 
   async ingest(actor: Actor, body: SmsIngestBody): Promise<SmsIngestResponse> {
@@ -208,6 +249,7 @@ export class SmsService {
           ids.push(created.id);
           if (!lastReceivedAt || receivedAt > lastReceivedAt) lastReceivedAt = receivedAt;
           await this.persistParsed(created.id, item.body);
+          await this.reconcileFiling(created.id, targetId, item.body, receivedAt);
         } catch (error) {
           if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
             // Already stored for this firm; not an error.

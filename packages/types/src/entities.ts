@@ -2,6 +2,7 @@ import {
   ClientStatus,
   DevicePlatform,
   DocumentType,
+  FilingEventSource,
   FilingStatus,
   FirmStatus,
   LinkStatus,
@@ -187,6 +188,11 @@ export interface ParsedGstData {
   taxAmount?: number | null;
   hsn?: string | null;
   dueDate?: string | null;
+  returnType?: ReturnType | null;
+  period?: string | null;
+  arn?: string | null;
+  lateFee?: number | null;
+  filed?: boolean | null;
   confidence: number;
   rawJson?: Record<string, unknown> | null;
 }
@@ -250,6 +256,21 @@ export interface Filing {
   notes?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface FilingStatusEvent {
+  id: string;
+  filingId?: string | null;
+  returnId?: string | null;
+  clientId: string;
+  status: FilingStatus;
+  previousStatus?: FilingStatus | null;
+  source: FilingEventSource;
+  actorId?: string | null;
+  actorName?: string | null;
+  smsMessageId?: string | null;
+  note?: string | null;
+  createdAt: string;
 }
 
 export type PaymentState = 'NONE' | 'UNPAID' | 'PARTIAL' | 'PAID';

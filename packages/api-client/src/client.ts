@@ -24,6 +24,7 @@ import type {
   DeviceRegisterBody,
   Document,
   Filing,
+  FilingStatusEvent,
   Firm,
   FirmBillingSummary,
   FirmBranding,
@@ -177,6 +178,7 @@ export class GstFlowApi {
     list: (query?: ListQuery & { clientId?: string; status?: string }) =>
       this.http.get<PaginatedReturns>('/returns', query),
     create: (body: CreateGstReturnBody) => this.http.post<GstReturn>('/returns', body),
+    history: (id: string) => this.http.get<FilingStatusEvent[]>(`/returns/${id}/history`),
   };
 
   filings = {
@@ -186,6 +188,7 @@ export class GstFlowApi {
     updateStatus: (id: string, body: UpdateFilingStatusBody) =>
       this.http.patch<Filing>(`/filings/${id}/status`, body),
     update: (id: string, body: UpdateFilingBody) => this.http.patch<Filing>(`/filings/${id}`, body),
+    history: (id: string) => this.http.get<FilingStatusEvent[]>(`/filings/${id}/history`),
     payments: (id: string) => this.http.get<Payment[]>(`/filings/${id}/payments`),
     addPayment: (id: string, body: CreatePaymentBody) =>
       this.http.post<Payment>(`/filings/${id}/payments`, body),

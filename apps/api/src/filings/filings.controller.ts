@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { createFilingSchema, updateFilingSchema, updateFilingStatusSchema } from '@gstflow/validation';
-import type { Filing, PaginatedFilings } from '@gstflow/types';
+import type { Filing, FilingStatusEvent, PaginatedFilings } from '@gstflow/types';
 
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
@@ -35,6 +35,15 @@ export class FilingsController {
     @Body(new ZodValidationPipe(createFilingSchema)) body: CreateFilingInput,
   ): Promise<Filing> {
     return this.filings.createFiling(actor, body);
+  }
+
+  @Get(':id/history')
+  @RequirePermissions('filings:read')
+  async history(
+    @CurrentUser() actor: Actor,
+    @Param('id') id: string,
+  ): Promise<FilingStatusEvent[]> {
+    return this.filings.listFilingHistory(actor, id);
   }
 
   @Patch(':id/status')

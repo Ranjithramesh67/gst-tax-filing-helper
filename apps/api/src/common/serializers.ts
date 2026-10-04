@@ -10,6 +10,7 @@ import type {
   Device,
   Document,
   Filing,
+  FilingStatusEvent,
   Firm,
   GstReturn,
   Invoice,
@@ -307,6 +308,11 @@ export function serialiseParsed(parsed: {
   taxAmount: number | null;
   hsn: string | null;
   dueDate: Date | null;
+  returnType: string | null;
+  period: string | null;
+  arn: string | null;
+  lateFee: number | null;
+  filed: boolean | null;
   confidence: number;
   rawJson: unknown;
 }): ParsedGstData {
@@ -320,6 +326,11 @@ export function serialiseParsed(parsed: {
     taxAmount: parsed.taxAmount,
     hsn: parsed.hsn,
     dueDate: iso(parsed.dueDate),
+    returnType: (parsed.returnType as ParsedGstData['returnType']) ?? null,
+    period: parsed.period,
+    arn: parsed.arn,
+    lateFee: parsed.lateFee,
+    filed: parsed.filed,
     confidence: parsed.confidence,
     rawJson: (parsed.rawJson as Record<string, unknown> | null) ?? null,
   };
@@ -488,6 +499,36 @@ export function derivePaymentState(
   if (paid <= 0) return 'UNPAID';
   if (paid < fee) return 'PARTIAL';
   return 'PAID';
+}
+
+export function serialiseFilingEvent(event: {
+  id: string;
+  filingId: string | null;
+  returnId: string | null;
+  clientId: string;
+  status: string;
+  previousStatus: string | null;
+  source: string;
+  actorId: string | null;
+  actorName: string | null;
+  smsMessageId: string | null;
+  note: string | null;
+  createdAt: Date;
+}): FilingStatusEvent {
+  return {
+    id: event.id,
+    filingId: event.filingId,
+    returnId: event.returnId,
+    clientId: event.clientId,
+    status: event.status as FilingStatusEvent['status'],
+    previousStatus: (event.previousStatus as FilingStatusEvent['previousStatus']) ?? null,
+    source: event.source as FilingStatusEvent['source'],
+    actorId: event.actorId,
+    actorName: event.actorName,
+    smsMessageId: event.smsMessageId,
+    note: event.note,
+    createdAt: iso(event.createdAt)!,
+  };
 }
 
 export function serialisePaymentLink(link: {

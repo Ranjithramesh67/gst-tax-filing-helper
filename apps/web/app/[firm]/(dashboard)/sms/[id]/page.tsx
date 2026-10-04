@@ -146,6 +146,11 @@ export default function SmsDetailPage() {
                   <DetailRow label="Tax amount" value={formatMoney(parsed.taxAmount)} />
                   <DetailRow label="HSN" value={parsed.hsn ?? '-'} />
                   <DetailRow label="Due date" value={parsed.dueDate ?? '-'} />
+                  <DetailRow label="Return type" value={parsed.returnType ?? '-'} />
+                  <DetailRow label="Period" value={parsed.period ?? '-'} />
+                  <DetailRow label="ARN" value={parsed.arn ?? '-'} />
+                  <DetailRow label="Late fee" value={formatMoney(parsed.lateFee)} />
+                  <DetailRow label="Filed" value={parsed.filed ? 'Yes' : 'No'} />
                   <DetailRow
                     label="Confidence"
                     value={`${Math.round(parsed.confidence * 100)}%`}

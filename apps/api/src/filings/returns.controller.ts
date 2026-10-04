@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { createReturnSchema } from '@gstflow/validation';
-import type { GstReturn, PaginatedReturns } from '@gstflow/types';
+import type { FilingStatusEvent, GstReturn, PaginatedReturns } from '@gstflow/types';
 
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
@@ -20,6 +20,15 @@ export class ReturnsController {
     @Query(new ZodValidationPipe(returnsQuerySchema)) query: ReturnsQuery,
   ): Promise<PaginatedReturns> {
     return this.filings.listReturns(actor, query);
+  }
+
+  @Get(':id/history')
+  @RequirePermissions('returns:read')
+  async history(
+    @CurrentUser() actor: Actor,
+    @Param('id') id: string,
+  ): Promise<FilingStatusEvent[]> {
+    return this.filings.listReturnHistory(actor, id);
   }
 
   @Post()

@@ -1,19 +1,26 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import { FilingStatus } from '@gstflow/types';
+import { FilingEventSource, FilingStatus } from '@gstflow/types';
 import type {
   Filing,
+  FilingStatusEvent,
   GstReturn,
   Invoice,
   PaginatedFilings,
   PaginatedInvoices,
   PaginatedReturns,
+  ReturnType,
 } from '@gstflow/types';
 
 import { AuditService } from '../common/audit/audit.service';
 import type { Actor } from '../common/auth/actor.types';
 import { paginate, parsePagination } from '../common/pagination';
-import { serialiseFiling, serialiseInvoice, serialiseReturn } from '../common/serializers';
+import {
+  serialiseFiling,
+  serialiseFilingEvent,
+  serialiseInvoice,
+  serialiseReturn,
+} from '../common/serializers';
 import { PrismaService } from '../prisma/prisma.service';
 import type {
   CreateFilingInput,
@@ -177,6 +184,17 @@ export class FilingsService {
       entityId: filing.id,
       meta: { clientId: filing.clientId, returnId: filing.returnId, status: filing.status },
     });
+    await this.prisma.filingStatusEvent.create({
+      data: {
+        filingId: filing.id,
+        returnId: filing.returnId,
+        clientId: filing.clientId,
+        status: filing.status,
+        source: FilingEventSource.MANUAL,
+        actorId: actor.userId,
+        actorName: actor.name ?? null,
+      },
+    });
     return serialiseFiling(filing);
   }
 
@@ -229,7 +247,26 @@ export class FilingsService {
       include: { payments: { select: { amount: true, status: true } } },
     });
 
+    if (updated.status !== filing.status) {
+      await this.prisma.filingStatusEvent.create({
+        data: {
+          filingId: updated.id,
+          returnId: updated.returnId,
+          clientId: updated.clientId,
+          status: updated.status,
+          previousStatus: filing.status,
+          source: FilingEventSource.MANUAL,
+          actorId: actor.userId,
+          actorName: actor.name ?? null,
+        },
+      });
+    }
+
     if (filed && filing.returnId) {
+      const linked = await this.prisma.gstReturn.findUnique({
+        where: { id: filing.returnId },
+        select: { status: true },
+      });
       await this.prisma.gstReturn.update({
         where: { id: filing.returnId },
         data: {
@@ -239,6 +276,19 @@ export class FilingsService {
           referenceNo: body.referenceNo ?? filing.referenceNo ?? null,
         },
       });
+      if (linked) {
+        await this.prisma.filingStatusEvent.create({
+          data: {
+            returnId: filing.returnId,
+            clientId: updated.clientId,
+            status: FilingStatus.FILED,
+            previousStatus: linked.status,
+            source: FilingEventSource.MANUAL,
+            actorId: actor.userId,
+            actorName: actor.name ?? null,
+          },
+        });
+      }
     }
 
     await this.audit.recordAs(actor, {
@@ -248,6 +298,108 @@ export class FilingsService {
       meta: { status: updated.status, returnId: updated.returnId },
     });
     return serialiseFiling(updated);
+  }
+
+  async listFilingHistory(actor: Actor, filingId: string): Promise<FilingStatusEvent[]> {
+    const filing = await this.prisma.filing.findFirst({
+      where: { id: filingId, ...(actor.firmId ? { client: { is: { firmId: actor.firmId } } } : {}) },
+      select: { id: true },
+    });
+    if (!filing) throw new NotFoundException('Filing not found');
+    const events = await this.prisma.filingStatusEvent.findMany({
+      where: { filingId: filing.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    return events.map(serialiseFilingEvent);
+  }
+
+  async listReturnHistory(actor: Actor, returnId: string): Promise<FilingStatusEvent[]> {
+    const gstReturn = await this.prisma.gstReturn.findFirst({
+      where: { id: returnId, ...(actor.firmId ? { client: { is: { firmId: actor.firmId } } } : {}) },
+      select: { id: true },
+    });
+    if (!gstReturn) throw new NotFoundException('Return not found');
+    const events = await this.prisma.filingStatusEvent.findMany({
+      where: { returnId: gstReturn.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    return events.map(serialiseFilingEvent);
+  }
+
+  // Called from SMS ingest when a GSTN acknowledgement carries an ARN, return
+  // type and period. Transitions the matching open return (and any linked
+  // filings) to FILED, recording SMS-sourced history. Idempotent.
+  async applyFiledReturnFromSms(input: {
+    clientId: string;
+    returnType: ReturnType;
+    period: string;
+    referenceNo: string;
+    smsMessageId: string;
+    filedAt: Date;
+  }): Promise<{ updated: boolean; returnId: string | null }> {
+    const gstReturn = await this.prisma.gstReturn.findFirst({
+      where: {
+        clientId: input.clientId,
+        type: input.returnType,
+        period: input.period,
+        status: { not: FilingStatus.FILED },
+      },
+      select: { id: true, status: true },
+    });
+    if (!gstReturn) return { updated: false, returnId: null };
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.gstReturn.update({
+        where: { id: gstReturn.id },
+        data: {
+          status: FilingStatus.FILED,
+          filedAt: input.filedAt,
+          filedById: null,
+          referenceNo: input.referenceNo,
+        },
+      });
+      await tx.filingStatusEvent.create({
+        data: {
+          returnId: gstReturn.id,
+          clientId: input.clientId,
+          status: FilingStatus.FILED,
+          previousStatus: gstReturn.status,
+          source: FilingEventSource.SMS,
+          smsMessageId: input.smsMessageId,
+          note: 'Auto-filed from GSTN acknowledgement SMS',
+        },
+      });
+
+      const filings = await tx.filing.findMany({
+        where: { returnId: gstReturn.id, status: { not: FilingStatus.FILED } },
+        select: { id: true, status: true },
+      });
+      for (const filing of filings) {
+        await tx.filing.update({
+          where: { id: filing.id },
+          data: {
+            status: FilingStatus.FILED,
+            filedAt: input.filedAt,
+            filedById: null,
+            referenceNo: input.referenceNo,
+          },
+        });
+        await tx.filingStatusEvent.create({
+          data: {
+            filingId: filing.id,
+            returnId: gstReturn.id,
+            clientId: input.clientId,
+            status: FilingStatus.FILED,
+            previousStatus: filing.status,
+            source: FilingEventSource.SMS,
+            smsMessageId: input.smsMessageId,
+            note: 'Auto-filed from GSTN acknowledgement SMS',
+          },
+        });
+      }
+    });
+
+    return { updated: true, returnId: gstReturn.id };
   }
 
   private async assertClient(actor: Actor, clientId: string): Promise<{ id: string }> {

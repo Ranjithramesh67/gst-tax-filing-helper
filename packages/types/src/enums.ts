@@ -89,6 +89,13 @@ export const FilingStatus = {
 } as const;
 export type FilingStatus = (typeof FilingStatus)[keyof typeof FilingStatus];
 
+export const FilingEventSource = {
+  MANUAL: 'MANUAL',
+  SMS: 'SMS',
+  SYSTEM: 'SYSTEM',
+} as const;
+export type FilingEventSource = (typeof FilingEventSource)[keyof typeof FilingEventSource];
+
 export const ReleaseChannel = {
   STABLE: 'STABLE',
   BETA: 'BETA',

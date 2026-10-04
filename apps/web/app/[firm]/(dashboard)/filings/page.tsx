@@ -4,7 +4,7 @@ import { Fragment, Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
-import { CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, FileText, Plus, Wallet, XCircle } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, FileText, History, Plus, Wallet, XCircle } from 'lucide-react';
 import type { Filing, GstReturn, PaymentState, ReturnType } from '@gstflow/types';
 import { api } from '@/lib/api';
 import { useFirmBranding } from '@/lib/firm';
@@ -21,7 +21,7 @@ import {
   Spinner,
 } from '@/components/ui';
 import { PaymentsPanel } from '@/components/payments/PaymentsPanel';
-import { formatMoney } from '@/components/sms/classification';
+import { formatDateTime, formatMoney } from '@/components/sms/classification';
 
 const RETURN_TYPES: ReturnType[] = ['GSTR1', 'GSTR3B', 'GSTR9', 'OTHER'];
 
@@ -103,6 +103,47 @@ function Pagination({
         </Button>
       </div>
     </div>
+  );
+}
+
+function StatusHistoryPanel({ filingId }: { filingId: string }) {
+  const query = useQuery({
+    queryKey: ['filing-history', filingId],
+    queryFn: () => api.filings.history(filingId),
+  });
+
+  if (query.isLoading) return <Spinner />;
+  if (query.isError) {
+    return <p className="px-4 py-4 text-sm text-red-600">{errorMessage(query.error)}</p>;
+  }
+
+  const events = query.data ?? [];
+  if (events.length === 0) {
+    return <EmptyState title="No history" description="No status changes recorded yet." />;
+  }
+
+  return (
+    <ol className="space-y-3 px-4 py-4">
+      {events.map((event) => (
+        <li key={event.id} className="flex gap-3">
+          <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-brand-500" />
+          <div className="pb-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone={statusTone(event.status)}>{event.status}</Badge>
+              {event.previousStatus ? (
+                <span className="text-xs text-slate-400">from {event.previousStatus}</span>
+              ) : null}
+              <Badge tone={event.source === 'SMS' ? 'info' : 'neutral'}>{event.source}</Badge>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              {formatDateTime(event.createdAt)}
+              {event.actorName ? ` · ${event.actorName}` : ''}
+            </p>
+            {event.note ? <p className="mt-0.5 text-xs text-slate-500">{event.note}</p> : null}
+          </div>
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -393,6 +434,7 @@ function FilingsSection({
       : String(branding.defaultFilingFee),
   );
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [historyId, setHistoryId] = useState<string | null>(null);
 
   const [filterClientId, setFilterClientId] = useState(initialClientId);
   const [filterStatus, setFilterStatus] = useState('');
@@ -645,6 +687,15 @@ function FilingsSection({
                             </Button>
                             <Button
                               variant="secondary"
+                              onClick={() =>
+                                setHistoryId((current) => (current === item.id ? null : item.id))
+                              }
+                            >
+                              <History className="h-4 w-4" />
+                              History
+                            </Button>
+                            <Button
+                              variant="secondary"
                               disabled={busy || item.status === 'FILED'}
                               onClick={() =>
                                 updateStatus.mutate({
@@ -670,6 +721,13 @@ function FilingsSection({
                         <tr className="border-b border-slate-100">
                           <td colSpan={8} className="p-0">
                             <PaymentsPanel filingId={item.id} feeAmount={item.feeAmount} />
+                          </td>
+                        </tr>
+                      ) : null}
+                      {historyId === item.id ? (
+                        <tr className="border-b border-slate-100 bg-slate-50/50">
+                          <td colSpan={8} className="p-0">
+                            <StatusHistoryPanel filingId={item.id} />
                           </td>
                         </tr>
                       ) : null}

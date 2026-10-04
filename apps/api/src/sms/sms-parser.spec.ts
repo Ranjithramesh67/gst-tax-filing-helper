@@ -119,3 +119,55 @@ describe('parseGstSms', () => {
     expect(parsed.dueDate).toBeNull();
   });
 });
+
+describe('parseGstSms compliance detail', () => {
+  it('extracts the return type', () => {
+    expect(parseGstSms('Your GSTR-3B is due').returnType).toBe('GSTR3B');
+    expect(parseGstSms('GSTR 1 filed for Jan 2026').returnType).toBe('GSTR1');
+    expect(parseGstSms('GSTR-9 annual return due').returnType).toBe('GSTR9');
+    expect(parseGstSms('GSTR acknowledgement received').returnType).toBe('OTHER');
+    expect(parseGstSms('Your return is due').returnType).toBeNull();
+  });
+
+  it('normalises a month-name period to YYYY-MM', () => {
+    expect(parseGstSms('GSTR-3B for Jan 2026 is due').period).toBe('2026-01');
+    expect(parseGstSms('GSTR-1 for December 2025 filed').period).toBe('2025-12');
+  });
+
+  it('normalises a labelled numeric period', () => {
+    expect(parseGstSms('GSTR-3B for 07-2026 is due').period).toBe('2026-07');
+    expect(parseGstSms('Return period: 11/2026').period).toBe('2026-11');
+  });
+
+  it('maps an Indian FY quarter to its ending month', () => {
+    expect(parseGstSms('GSTR-1 Q3 FY2025-26 filed').period).toBe('2025-12');
+    expect(parseGstSms('GSTR-1 Q4 FY2025-26 filed').period).toBe('2026-03');
+  });
+
+  it('extracts a labelled ARN', () => {
+    const parsed = parseGstSms('GSTR-3B 07-2026 filed successfully. ARN: AA290621000123F');
+    expect(parsed.arn).toBe('AA290621000123F');
+    expect(parsed.filed).toBe(true);
+  });
+
+  it('does not mistake the GSTIN for an ARN', () => {
+    const parsed = parseGstSms('GSTIN 29ABCDE1234F1Z5 return due');
+    expect(parsed.arn).toBeNull();
+  });
+
+  it('extracts a late fee', () => {
+    expect(parseGstSms('Late fee Rs 1,000 due').lateFee).toBe(1000);
+    expect(parseGstSms('Penalty INR 250.50 applicable').lateFee).toBe(250.5);
+  });
+
+  it('detects a filed signal without an ARN', () => {
+    expect(parseGstSms('Your GSTR-3B has been filed successfully').filed).toBe(true);
+    expect(parseGstSms('Your GSTR-3B is due for filing').filed).toBe(false);
+  });
+
+  it('keeps confidence within bounds with the expanded field set', () => {
+    const parsed = parseGstSms(SAMPLE_BODY);
+    expect(parsed.confidence).toBeGreaterThan(0);
+    expect(parsed.confidence).toBeLessThanOrEqual(1);
+  });
+});

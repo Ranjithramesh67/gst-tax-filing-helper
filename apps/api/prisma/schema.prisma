@@ -264,6 +264,7 @@ model Client {
   filings       Filing[]
   refreshTokens RefreshToken[]
   payments      Payment[]
+  statusEvents  FilingStatusEvent[]
 
   billingInvoices BillingInvoice[]
   subscriptions   Subscription[]
@@ -358,6 +359,11 @@ model ParsedGstData {
   taxAmount    Float?
   hsn          String?
   dueDate      DateTime?
+  returnType   ReturnType?
+  period       String?
+  arn          String?
+  lateFee      Float?
+  filed        Boolean?
   confidence   Float     @default(0)
   rawJson      Json?
 
@@ -418,6 +424,7 @@ model GstReturn {
 
   client  Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   filings Filing[]
+  statusEvents FilingStatusEvent[]
 
   @@unique([clientId, type, period])
   @@index([clientId, status])
@@ -444,9 +451,39 @@ model Filing {
 
   billingItems    BillingInvoiceItem[]
   paymentRequests PaymentRequest[]
+  statusEvents    FilingStatusEvent[]
 
   @@index([clientId, status])
   @@index([returnId])
+}
+
+enum FilingEventSource {
+  MANUAL
+  SMS
+  SYSTEM
+}
+
+model FilingStatusEvent {
+  id             String            @id @default(cuid())
+  filingId       String?
+  returnId       String?
+  clientId       String
+  status         FilingStatus
+  previousStatus FilingStatus?
+  source         FilingEventSource @default(MANUAL)
+  actorId        String?
+  actorName      String?
+  smsMessageId   String?
+  note           String?
+  createdAt      DateTime          @default(now())
+
+  filing    Filing?    @relation(fields: [filingId], references: [id], onDelete: Cascade)
+  gstReturn GstReturn? @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  client    Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([filingId, createdAt])
+  @@index([returnId, createdAt])
+  @@index([clientId, createdAt])
 }
 
 model AppRelease {

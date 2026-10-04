@@ -89,6 +89,11 @@ Notes: ingest requires an active client session and verified consent; each item 
 rest, auto-classified and parsed into `ParsedGstData`. Duplicate `(clientId, hash)` rows are
 reported as `duplicates`. Bodies are decrypted on read for staff.
 
+Parsed fields include the invoice-shaped values (`gstin`, `invoiceNo`, `amount`, `taxableValue`,
+`taxAmount`, `hsn`, `dueDate`) plus compliance detail (`returnType`, `period` as `YYYY-MM`, `arn`,
+`lateFee`, `filed`). When a message reports a filed return (ARN + type + period), the matching open
+return and any linked filings are transitioned to `FILED` with an `SMS`-sourced history event.
+
 ## Documents
 
 All document endpoints require staff roles. Upload is `multipart/form-data`.
@@ -117,6 +122,7 @@ Staff roles only.
 |---|---|---|---|
 | GET | `/returns` | query: `clientId?`, `status?` (`PENDING`/`IN_REVIEW`/`FILED`/`REJECTED`), `type?` (`GSTR1`/`GSTR3B`/`GSTR9`/`OTHER`), `page?`, `pageSize?` | `Paginated<GstReturn>` |
 | POST | `/returns` | `clientId`, `type`, `period` (`YYYY-MM`), `dueDate?`, `notes?`, `status?` | `GstReturn` |
+| GET | `/returns/:id/history` | - | `FilingStatusEvent[]` (newest first; includes linked filing events) |
 
 ## Filings
 
@@ -127,9 +133,12 @@ Staff roles only.
 | GET | `/filings` | query: `clientId?`, `status?`, `type?`, `page?`, `pageSize?` | `Paginated<Filing>` |
 | POST | `/filings` | `clientId`, `returnId?`, `type`, `period` (`YYYY-MM`), `referenceNo?`, `notes?`, `status?` | `Filing` |
 | PATCH | `/filings/:id/status` | `status`, `referenceNo?`, `notes?` | `Filing` |
+| GET | `/filings/:id/history` | - | `FilingStatusEvent[]` (newest first) |
 
 Notes: setting a filing to `FILED` records `filedAt`/`filedById`, and when the filing is linked to
-a return (`returnId`) the parent `GstReturn` is marked `FILED` too.
+a return (`returnId`) the parent `GstReturn` is marked `FILED` too. Every status transition is
+appended to `FilingStatusEvent` (`source`: `MANUAL`/`SMS`/`SYSTEM`, optional actor, note and
+`smsMessageId`), visible through the history endpoint and the Filings page History panel.
 
 ## Firm settings
 

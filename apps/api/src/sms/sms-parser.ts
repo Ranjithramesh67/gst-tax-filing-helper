@@ -1,4 +1,4 @@
-import type { SmsCategory } from '@gstflow/types';
+import type { ReturnType, SmsCategory } from '@gstflow/types';
 
 // Capture rule shared with the Kotlin GstFilter and the JS mirror: a message is
 // GST-related when the sender (header) or the body contains "gst"
@@ -51,6 +51,51 @@ const HSN_REGEX = /hsn(?:\s*(?:code|no|number))?\s*[:#.\-]?\s*([0-9]{4,8})/i;
 const DUE_DATE_REGEX = /due(?:\s*date|\s*on)?\s*[:#.\-]?\s*(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})/i;
 const DATE_REGEX = /(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})/;
 
+const GSTR_3B_REGEX = /\bgstr[\s\-_]*3\s*b\b/i;
+const GSTR_1_REGEX = /\bgstr[\s\-_]*1\b/i;
+const GSTR_9_REGEX = /\bgstr[\s\-_]*9\b/i;
+const GSTR_ANY_REGEX = /\bgstr\b/i;
+
+const MONTH_NAMES = [
+  'jan',
+  'feb',
+  'mar',
+  'apr',
+  'may',
+  'jun',
+  'jul',
+  'aug',
+  'sep',
+  'oct',
+  'nov',
+  'dec',
+] as const;
+const MONTH_PERIOD_REGEX = new RegExp(
+  `\\b(${MONTH_NAMES.join('|')})[a-z]*[,\\s'\\/\\-]*(\\d{4})\\b`,
+  'i',
+);
+const LABELLED_PERIOD_REGEX =
+  /(?:for|period|month(?:\s*of)?|return\s*period)\s*[:#\-]?\s*(0?[1-9]|1[0-2])[\/\-](\d{4})/i;
+const BARE_PERIOD_REGEX = /(?:^|[^\d])(0?[1-9]|1[0-2])[\/\-](\d{4})(?![\d])/;
+const QUARTER_REGEX = /\bq([1-4])\b[\s,]*(?:fy)?[\s\-]*(\d{4})(?:[\s\-]*(\d{2}))?/i;
+// Indian FY quarter-end months: Q1→Jun, Q2→Sep, Q3→Dec, Q4→Mar (next year).
+const QUARTER_END_MONTH: Record<number, { month: number; nextYear: boolean }> = {
+  1: { month: 6, nextYear: false },
+  2: { month: 9, nextYear: false },
+  3: { month: 12, nextYear: false },
+  4: { month: 3, nextYear: true },
+};
+
+const ARN_LABELLED_REGEX =
+  /\b(?:arn|ack(?:nowledg(?:e?ment)?)?(?:\s*(?:ref|no|number))?|reference\s*(?:no|number|id))\s*[:#.\-]?\s*([A-Z0-9]{15})\b/i;
+const ARN_GENERIC_REGEX = /\b([A-Z]{2}[0-9]{2}[A-Z0-9]{11})\b/;
+const FILED_REGEX =
+  /\b(?:successfully\s+filed|filed\s+successfully|filed|submitted|accepted)\b/i;
+const LATE_FEE_REGEX = new RegExp(
+  `(?:late\\s*fees?|penalt(?:y|ies))\\s*[:#.\\-]?\\s*${CURRENCY_PATTERN}(${NUMBER_PATTERN})`,
+  'i',
+);
+
 export interface ParsedSms {
   gstin: string | null;
   invoiceNo: string | null;
@@ -59,6 +104,11 @@ export interface ParsedSms {
   taxAmount: number | null;
   hsn: string | null;
   dueDate: Date | null;
+  returnType: ReturnType | null;
+  period: string | null;
+  arn: string | null;
+  lateFee: number | null;
+  filed: boolean;
   confidence: number;
 }
 
@@ -100,6 +150,55 @@ function matchDate(text: string, regex: RegExp): Date | null {
   return parseDate(match[1]!, match[2]!, match[3]!);
 }
 
+function parseReturnType(text: string): ReturnType | null {
+  if (GSTR_3B_REGEX.test(text)) return 'GSTR3B';
+  if (GSTR_1_REGEX.test(text)) return 'GSTR1';
+  if (GSTR_9_REGEX.test(text)) return 'GSTR9';
+  if (GSTR_ANY_REGEX.test(text)) return 'OTHER';
+  return null;
+}
+
+function monthNumber(raw: string): number | null {
+  const index = MONTH_NAMES.indexOf(raw.slice(0, 3).toLowerCase() as (typeof MONTH_NAMES)[number]);
+  return index >= 0 ? index + 1 : null;
+}
+
+function formatPeriod(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2, '0')}`;
+}
+
+function parsePeriod(text: string): string | null {
+  const named = MONTH_PERIOD_REGEX.exec(text);
+  if (named) {
+    const month = monthNumber(named[1]!);
+    if (month) return formatPeriod(Number(named[2]), month);
+  }
+
+  const quarter = QUARTER_REGEX.exec(text);
+  if (quarter) {
+    const end = QUARTER_END_MONTH[Number(quarter[1])]!;
+    const year = Number(quarter[2]) + (end.nextYear ? 1 : 0);
+    return formatPeriod(year, end.month);
+  }
+
+  const labelled = LABELLED_PERIOD_REGEX.exec(text);
+  if (labelled) return formatPeriod(Number(labelled[2]), Number(labelled[1]));
+
+  const bare = BARE_PERIOD_REGEX.exec(text);
+  if (bare) return formatPeriod(Number(bare[2]), Number(bare[1]));
+
+  return null;
+}
+
+function parseArn(text: string, gstin: string | null): string | null {
+  const labelled = ARN_LABELLED_REGEX.exec(text.toUpperCase());
+  if (labelled?.[1]) return labelled[1];
+
+  const generic = ARN_GENERIC_REGEX.exec(text.toUpperCase());
+  if (generic?.[1] && generic[1] !== gstin) return generic[1];
+  return null;
+}
+
 export function isGstRelated(body: string, sender?: string | null): boolean {
   return (body ?? '').toLowerCase().includes('gst') || (sender ?? '').toLowerCase().includes('gst');
 }
@@ -127,10 +226,41 @@ export function parseGstSms(body: string): ParsedSms {
   const taxAmount = parseNumber(TAX_REGEX.exec(text)?.[1]);
   const hsn = HSN_REGEX.exec(text)?.[1] ?? null;
   const dueDate = matchDate(text, DUE_DATE_REGEX) ?? matchDate(text, DATE_REGEX);
+  const returnType = parseReturnType(text);
+  const period = parsePeriod(text);
+  const arn = parseArn(text, gstin);
+  const lateFee = parseNumber(LATE_FEE_REGEX.exec(text)?.[1]);
+  const filed = arn != null || FILED_REGEX.test(text);
 
-  const fields = [gstin, invoiceNo, amount, taxableValue, taxAmount, hsn, dueDate];
+  const fields = [
+    gstin,
+    invoiceNo,
+    amount,
+    taxableValue,
+    taxAmount,
+    hsn,
+    dueDate,
+    returnType,
+    period,
+    arn,
+    lateFee,
+  ];
   const matched = fields.filter((field) => field != null).length;
   const confidence = Math.round((matched / fields.length) * 100) / 100;
 
-  return { gstin, invoiceNo, amount, taxableValue, taxAmount, hsn, dueDate, confidence };
+  return {
+    gstin,
+    invoiceNo,
+    amount,
+    taxableValue,
+    taxAmount,
+    hsn,
+    dueDate,
+    returnType,
+    period,
+    arn,
+    lateFee,
+    filed,
+    confidence,
+  };
 }
