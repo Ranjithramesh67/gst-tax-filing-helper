@@ -101,7 +101,7 @@ model OtpEvent {
 - **Grouping at ingest.** On a new event, find the latest `OtpEvent` for
   `(clientId, code)` whose `receivedAt` is within the window; if found, reuse its
   `groupId`, otherwise set `groupId = own id`. Window from `SystemSetting`
-  `otp.groupWindowSeconds` (default `300`).
+  `otp.settings` (`groupWindowSeconds`, default `300`).
 - **Backfill.** A one-time job extracts OTPs from existing `SmsMessage` bodies and
   creates `OtpEvent(source=SMS, sourceRef=smsId, receivedAt=... )` so history
   participates in grouping. Idempotent via the unique key.
