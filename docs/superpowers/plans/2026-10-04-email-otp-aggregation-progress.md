@@ -30,7 +30,7 @@ Execution mode: subagent-driven-development
 | 6 | Admin OTP settings | done (review clean) | `cf55c3d`, `e83b589`, `c0dcb59`, `70800b4`, `38e0244`, `13f6e12` |
 | 7 | Firm web `/sms` OTP card | done (review clean) | `39a09b0`, `88d192d`, `37280ac`, `0da3f63` |
 | 8 | Server e2e for grouping + inbox (+ staff `/inbox` scoping fix) | done (review clean) | `3d10641`, `a277c9c` |
-| 9 | Kotlin OTP extractor (parity) | pending | - |
+| 9 | Kotlin OTP extractor (parity) | done (review clean after fix) | `008c5f3`, `2f1c9f4` |
 | 10 | Encrypted account store + registry | pending | - |
 | 11 | `EmailConnector` interface + IMAP | pending | - |
 | 12 | Poller + outbox + retry job | pending | - |
