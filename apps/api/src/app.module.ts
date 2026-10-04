@@ -6,6 +6,7 @@ import { join } from 'path';
 import { PrismaModule } from './prisma/prisma.module';
 import { CryptoModule } from './common/crypto/crypto.module';
 import { AuditModule } from './common/audit/audit.module';
+import { SmsGatewayModule } from './common/sms/sms-gateway.module';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
 import { ClientsModule } from './clients/clients.module';
@@ -36,6 +37,7 @@ import { JwtModule } from './common/jwt/jwt.module';
     PrismaModule,
     CryptoModule,
     AuditModule,
+    SmsGatewayModule,
     HealthModule,
     AuthModule,
     ClientsModule,

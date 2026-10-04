@@ -54,6 +54,11 @@ Notes: `otp/verify` looks up an active client by phone, upserts the device when 
 versioned `ConsentRecord` (`otpVerified: true`), sets `client.consentGranted`, and issues client
 tokens. OTPs expire after `OTP_TTL_SECONDS` and allow at most 5 attempts.
 
+`otp/request` always stores the OTP. When `SMS_GATEWAY_ENABLED=true` it also delivers the OTP via
+the configured ping4sms DLT template (`SMS_GATEWAY_TEMPLATE_ID`, default `1207170351303889084`);
+delivery is best-effort and never blocks the request. With the flag off (local dev) the code is
+only logged, and echoed in the response when `OTP_DEV_ECHO=true`.
+
 ## Clients
 
 | Method | Path | Roles | Key request fields | Response |

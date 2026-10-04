@@ -14,6 +14,7 @@ import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { AuditService } from '../common/audit/audit.service';
+import { SmsGatewayService } from '../common/sms/sms-gateway.service';
 import { CONSENT_VERSION } from '../common/constants';
 import type { Actor } from '../common/auth/actor.types';
 import { toSystemRole } from '../common/auth/actor.types';
@@ -34,6 +35,7 @@ export class OtpService {
     private readonly crypto: CryptoService,
     private readonly config: ConfigService,
     private readonly audit: AuditService,
+    private readonly smsGateway: SmsGatewayService,
   ) {}
 
   private get ttlSeconds(): number {
@@ -65,6 +67,14 @@ export class OtpService {
     });
 
     this.logger.log(`OTP for ${phone} (${purpose}): ${code}`);
+
+    const delivery = await this.smsGateway.sendOtp(phone, code);
+    if (!delivery.ok && !delivery.skipped) {
+      this.logger.warn(
+        `OTP SMS delivery failed for ${phone}: ${delivery.error ?? `status ${delivery.status}`}`,
+      );
+    }
+
     const echo = this.config.get<string>('OTP_DEV_ECHO') === 'true';
     return { requestId: record.id, expiresIn: this.ttlSeconds, ...(echo ? { devCode: code } : {}) };
   }
