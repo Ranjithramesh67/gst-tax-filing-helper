@@ -429,6 +429,24 @@ const feedActor = {
   clientId: 'client-1',
 } as unknown as Actor;
 
+const firmAdminActor = {
+  ...feedActor,
+  userId: 'u-admin',
+  role: 'FIRM_ADMIN',
+  roleKey: 'FIRM_ADMIN',
+  clientId: null,
+} as unknown as Actor;
+
+const superAdminActor = {
+  ...feedActor,
+  userId: 'u-super',
+  role: 'SUPER_ADMIN',
+  roleKey: 'SUPER_ADMIN',
+  isSuperAdmin: true,
+  firmId: null,
+  clientId: null,
+} as unknown as Actor;
+
 function otpRow(overrides: Record<string, unknown> = {}) {
   return {
     id: 'otp-1',
@@ -678,13 +696,49 @@ describe('OtpService.listFeed', () => {
     expect(result.items[0].id).toBe('sms-19');
   });
 
-  it('refuses a non-CLIENT actor', async () => {
+  it('lets firm staff read every client of their firm', async () => {
+    const prisma = buildFeedPrisma();
+    (prisma.otpEvent.findMany as jest.Mock)
+      .mockResolvedValueOnce([otpRow({ clientId: 'client-2', sourceRef: 'sms-2' })])
+      .mockResolvedValueOnce([]);
+    const service = new OtpService(prisma, buildCrypto());
+
+    const result = await service.listFeed(firmAdminActor, {});
+
+    const otpArg = (prisma.otpEvent.findMany as jest.Mock).mock.calls[0][0];
+    expect(otpArg.where).toEqual({ firmId: 'firm-1' });
+    expect(prisma.smsMessage.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { client: { firmId: 'firm-1' } },
+        take: 500,
+      }),
+    );
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({ kind: 'OTP', client: { id: 'client-2' } });
+  });
+
+  it('narrows firm staff to a query clientId within the firm only', async () => {
     const prisma = buildFeedPrisma();
     const service = new OtpService(prisma, buildCrypto());
-    const staff = { ...feedActor, role: 'FILER', clientId: null } as unknown as Actor;
 
-    await expect(service.listFeed(staff, {})).rejects.toThrow();
-    expect(prisma.otpEvent.findMany).not.toHaveBeenCalled();
+    await service.listFeed(firmAdminActor, { clientId: 'client-2' });
+
+    const otpArg = (prisma.otpEvent.findMany as jest.Mock).mock.calls[0][0];
+    expect(otpArg.where).toEqual({ firmId: 'firm-1', clientId: 'client-2' });
+    const smsArg = (prisma.smsMessage.findMany as jest.Mock).mock.calls[0][0];
+    expect(smsArg.where).toEqual({ client: { firmId: 'firm-1' }, clientId: 'client-2' });
+  });
+
+  it('gives a super admin no firm or client restriction', async () => {
+    const prisma = buildFeedPrisma();
+    const service = new OtpService(prisma, buildCrypto());
+
+    await service.listFeed(superAdminActor, {});
+
+    const otpArg = (prisma.otpEvent.findMany as jest.Mock).mock.calls[0][0];
+    expect(otpArg.where).toEqual({});
+    const smsArg = (prisma.smsMessage.findMany as jest.Mock).mock.calls[0][0];
+    expect(smsArg.where).toEqual({});
   });
 });
 
@@ -758,12 +812,42 @@ describe('OtpService.getGroup', () => {
     await expect(service.getGroup(feedActor, 'group-x')).rejects.toThrow();
   });
 
-  it('refuses a non-CLIENT actor', async () => {
+  it('lets firm staff read a group for any client of their firm', async () => {
+    const prisma = buildGroupPrisma();
+    (prisma.otpEvent.findMany as jest.Mock).mockResolvedValue([otpRow({ clientId: 'client-2' })]);
+    (prisma.client.findUnique as jest.Mock).mockResolvedValue({ id: 'client-2', name: 'Beta' });
+    const service = new OtpService(prisma, buildCrypto());
+
+    const detail = await service.getGroup(firmAdminActor, 'group-1');
+
+    expect(prisma.otpEvent.findMany).toHaveBeenCalledWith({
+      where: { firmId: 'firm-1', OR: [{ id: 'group-1' }, { groupId: 'group-1' }] },
+      orderBy: { receivedAt: 'asc' },
+    });
+    expect(detail.client.id).toBe('client-2');
+    expect(detail.events).toHaveLength(1);
+  });
+
+  it('returns NotFound for staff when no group in their firm matches', async () => {
     const prisma = buildGroupPrisma();
     const service = new OtpService(prisma, buildCrypto());
-    const staff = { ...feedActor, role: 'FILER', clientId: null } as unknown as Actor;
 
-    await expect(service.getGroup(staff, 'group-1')).rejects.toThrow();
-    expect(prisma.otpEvent.findMany).not.toHaveBeenCalled();
+    await expect(service.getGroup(firmAdminActor, 'group-x')).rejects.toThrow();
+    expect(prisma.otpEvent.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ firmId: 'firm-1' }) }),
+    );
+  });
+
+  it('gives a super admin an unscoped group lookup', async () => {
+    const prisma = buildGroupPrisma();
+    (prisma.otpEvent.findMany as jest.Mock).mockResolvedValue([otpRow()]);
+    const service = new OtpService(prisma, buildCrypto());
+
+    await service.getGroup(superAdminActor, 'group-1');
+
+    expect(prisma.otpEvent.findMany).toHaveBeenCalledWith({
+      where: { OR: [{ id: 'group-1' }, { groupId: 'group-1' }] },
+      orderBy: { receivedAt: 'asc' },
+    });
   });
 });

@@ -216,9 +216,28 @@ describe('Unified inbox feed (e2e)', () => {
     expect(crossed.body.items).toHaveLength(0);
   });
 
-  it('rejects unauthenticated requests and firm-scoped tokens', async () => {
+  it('lets firm staff read the firm-wide inbox and still rejects unauthenticated requests', async () => {
     await request(app.getHttpServer()).get('/v1/inbox').expect(401);
-    await request(app.getHttpServer()).get('/v1/inbox').set(auth(firmToken)).expect(403);
+
+    const res = await request(app.getHttpServer())
+      .get('/v1/inbox')
+      .set(auth(firmToken))
+      .expect(200);
+
+    // Staff see the grouped OTP items belonging to their firm's clients.
+    const mine = res.body.items.filter(
+      (entry: { kind: string; client?: { id: string } }) =>
+        entry.kind === 'OTP' && entry.client?.id === clientId,
+    );
+    expect(mine.length).toBeGreaterThan(0);
+
+    // A query clientId outside the firm (the second tenant's client) yields
+    // nothing, even for staff.
+    const crossed = await request(app.getHttpServer())
+      .get(`/v1/inbox?clientId=${secondClientId}`)
+      .set(auth(firmToken))
+      .expect(200);
+    expect(crossed.body.items).toHaveLength(0);
   });
 
   it('returns code-masked per-event detail for an OTP group', async () => {
@@ -257,7 +276,7 @@ describe('Unified inbox feed (e2e)', () => {
     const otherCode = uniqueCode();
 
     // Delta baseline: the unique code is unknown to this tenant before ingest.
-    const before = await fetchInbox();
+    const before = await fetchInbox(firmToken);
     expect(before.body.items.some((entry: { code?: string }) => entry.code === code)).toBe(false);
 
     // SMS source path: the body carries the OTP; ingest extracts and files it.
@@ -265,7 +284,7 @@ describe('Unified inbox feed (e2e)', () => {
     // EMAIL source path: same code, < window (default 300s) later.
     await ingestEmail(code, new Date(Date.now() + 1000).toISOString());
 
-    const after = await fetchInbox();
+    const after = await fetchInbox(firmToken);
     const grouped = after.body.items.filter(
       (entry: { kind: string; code?: string }) => entry.kind === 'OTP' && entry.code === code,
     );
@@ -284,7 +303,7 @@ describe('Unified inbox feed (e2e)', () => {
 
     // A different code lands in its own OTP item.
     await ingestSms(otherCode);
-    const withOther = await fetchInbox();
+    const withOther = await fetchInbox(firmToken);
     const otherGrouped = withOther.body.items.filter(
       (entry: { kind: string; code?: string }) => entry.kind === 'OTP' && entry.code === otherCode,
     );
@@ -311,6 +330,13 @@ describe('Unified inbox feed (e2e)', () => {
     );
     expect(item).toBeDefined();
 
+    // Same-firm staff can read the group detail.
+    await request(app.getHttpServer())
+      .get(`/v1/inbox/${item.id}`)
+      .set(auth(firmToken))
+      .expect(200);
+
+    // A different tenant's client never can.
     await request(app.getHttpServer())
       .get(`/v1/inbox/${item.id}`)
       .set(auth(secondClientToken))
@@ -320,10 +346,49 @@ describe('Unified inbox feed (e2e)', () => {
     await request(app.getHttpServer())
       .get('/v1/inbox/does-not-exist')
       .set(auth(firmToken))
-      .expect(403);
+      .expect(404);
     await request(app.getHttpServer())
       .get('/v1/inbox/does-not-exist')
       .set(auth(clientToken))
+      .expect(404);
+  });
+
+  it('keeps firm staff detail scoped to their own firm', async () => {
+    // Create a group under the second firm's client.
+    const secondCode = `9${Math.floor(10000 + Math.random() * 90000)}`;
+    await request(app.getHttpServer())
+      .post('/v1/sms/ingest')
+      .set(auth(secondClientToken))
+      .send({
+        items: [
+          {
+            sender: 'AX-BANK-S',
+            body: `Your login OTP is ${secondCode}. Do not share.`,
+            receivedAt: new Date().toISOString(),
+            hash: `hash-second-${secondCode}-${suffix}`,
+          },
+        ],
+      })
+      .expect(201);
+
+    const secondList = await fetchInbox(secondClientToken);
+    const secondItem = secondList.body.items.find(
+      (entry: { kind: string; code?: string }) =>
+        entry.kind === 'OTP' && entry.code === secondCode,
+    );
+    expect(secondItem).toBeDefined();
+
+    // Primary firm staff cannot see it in the feed, even when narrowing to the
+    // second firm's client id...
+    const firmList = await fetchInbox(firmToken, `?clientId=${secondClientId}`);
+    expect(firmList.body.items.some((entry: { id: string }) => entry.id === secondItem.id)).toBe(
+      false,
+    );
+
+    // ...nor read its detail: cross-firm is a 404, never a leak.
+    await request(app.getHttpServer())
+      .get(`/v1/inbox/${secondItem.id}`)
+      .set(auth(firmToken))
       .expect(404);
   });
 });

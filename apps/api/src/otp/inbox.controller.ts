@@ -13,7 +13,7 @@ export class InboxController {
   constructor(private readonly otp: OtpService) {}
 
   @Get()
-  @Roles(Role.CLIENT)
+  @Roles(Role.CLIENT, Role.FIRM_ADMIN, Role.FILER, Role.SUPER_ADMIN)
   async list(
     @CurrentUser() actor: Actor,
     @Query() query: InboxListQueryDto,
@@ -22,7 +22,7 @@ export class InboxController {
   }
 
   @Get(':id')
-  @Roles(Role.CLIENT)
+  @Roles(Role.CLIENT, Role.FIRM_ADMIN, Role.FILER, Role.SUPER_ADMIN)
   async group(
     @CurrentUser() actor: Actor,
     @Param('id') id: string,

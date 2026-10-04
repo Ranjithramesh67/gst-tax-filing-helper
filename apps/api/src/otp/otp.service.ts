@@ -343,13 +343,65 @@ export class OtpService {
   }
 
   /**
-   * Unified inbox feed for the authenticated client.
+   * Resolves the tenant scope for inbox reads, mirroring `SmsService.scope`:
    *
-   * OTP events for the actor's firm+client are collapsed by their persisted
-   * `groupId`; SMS rows whose id is referenced by an SMS-sourced `OtpEvent` are
-   * removed because the group already represents them. OTP groups and remaining
-   * raw SMS are merged, sorted newest-first, and paginated in memory over an
-   * over-fetched window capped at {@link FEED_OVERFETCH} rows per source.
+   * - SUPER_ADMIN sees every firm/client (`{}`), optionally narrowed by a
+   *   `queryClientId`.
+   * - A client actor (role CLIENT or an attached `clientId`) is pinned to its
+   *   own `{ firmId, clientId }`; a `queryClientId` other than its own yields no
+   *   rows (never widens scope).
+   * - Firm staff (FIRM_ADMIN/FILER) see every client of their firm; an optional
+   *   `queryClientId` narrows within the firm only. `SmsMessage` has no `firmId`
+   *   column, so staff SMS scope uses `{ client: { firmId } }`.
+   *
+   * Returns `null` when the request can never match anything (e.g. a client
+   * asking for another client), so callers can short-circuit to an empty page.
+   */
+  private inboxScope(
+    actor: Actor,
+    queryClientId?: string,
+  ): { otp: Prisma.OtpEventWhereInput; sms: Prisma.SmsMessageWhereInput } | null {
+    if (actor.role === Role.SUPER_ADMIN) {
+      const otp: Prisma.OtpEventWhereInput = {};
+      const sms: Prisma.SmsMessageWhereInput = {};
+      if (queryClientId) {
+        otp.clientId = queryClientId;
+        sms.clientId = queryClientId;
+      }
+      return { otp, sms };
+    }
+
+    const firmId = actor.firmId ?? '__no_firm__';
+
+    if (actor.role === Role.CLIENT || actor.clientId != null) {
+      const clientId = actor.clientId;
+      if (!clientId) return null;
+      // A client may only ever read its own rows; a mismatched query clientId
+      // is an empty result, never a widened scope.
+      if (queryClientId && queryClientId !== clientId) return null;
+      return { otp: { firmId, clientId }, sms: { clientId } };
+    }
+
+    // Firm staff: all clients of the firm, optionally narrowed to one client.
+    if (queryClientId) {
+      return {
+        otp: { firmId, clientId: queryClientId },
+        sms: { client: { firmId }, clientId: queryClientId },
+      };
+    }
+    return { otp: { firmId }, sms: { client: { firmId } } };
+  }
+
+  /**
+   * Unified inbox feed for the authenticated actor.
+   *
+   * Client actors see only their own firm+client; firm staff see every client of
+   * their firm (optionally narrowed by `query.clientId`); super admins see all.
+   * OTP events for the scoped tenants are collapsed by their persisted `groupId`;
+   * SMS rows whose id is referenced by an SMS-sourced `OtpEvent` are removed
+   * because the group already represents them. OTP groups and remaining raw SMS
+   * are merged, sorted newest-first, and paginated in memory over an over-fetched
+   * window capped at {@link FEED_OVERFETCH} rows per source.
    *
    * Privacy: an OTP group exposes only its code plus a short, code-masked
    * snippet/context. Raw SMS rows reuse the same full decrypted body as the
@@ -357,26 +409,20 @@ export class OtpService {
    * EMAIL bodies are never stored/uploaded.
    */
   async listFeed(actor: Actor, query: InboxListQueryDto): Promise<PaginatedInbox> {
-    const clientId = actor.clientId;
-    if (actor.role !== Role.CLIENT || !clientId) {
-      throw new ForbiddenException('No client is associated with this account');
-    }
-
     const slice = parsePagination({
       page: toNumber(query.page),
       pageSize: toNumber(query.pageSize),
     });
 
-    // A client actor owns exactly one client row. A query-supplied clientId can
-    // never widen or cross tenant scope: anything but the actor's own id yields
-    // no rows.
-    if (query.clientId && query.clientId !== clientId) {
+    const scope = this.inboxScope(actor, query.clientId);
+    if (!scope) {
       return paginate<InboxItem>([], 0, slice);
     }
 
-    const firmId = actor.firmId ?? '__no_firm__';
-    const otpWhere: Prisma.OtpEventWhereInput = { firmId, clientId };
-    const smsWhere: Prisma.SmsMessageWhereInput = { clientId };
+    const otpScope = scope.otp;
+    const smsScope = scope.sms;
+    const otpWhere: Prisma.OtpEventWhereInput = { ...otpScope };
+    const smsWhere: Prisma.SmsMessageWhereInput = { ...smsScope };
     if (query.category) smsWhere.category = query.category as SmsMessage['category'];
     if (query.status) smsWhere.status = query.status as SmsMessage['status'];
     if (query.search) {
@@ -411,7 +457,7 @@ export class OtpService {
     const smsIds = smsRows.map((row) => row.id);
     const referenced = smsIds.length
       ? await this.prisma.otpEvent.findMany({
-          where: { firmId, clientId, source: 'SMS', sourceRef: { in: smsIds } },
+          where: { ...otpScope, source: 'SMS', sourceRef: { in: smsIds } },
           select: { sourceRef: true },
         })
       : [];
@@ -433,25 +479,28 @@ export class OtpService {
 
   /**
    * Detail for a single OTP group: every underlying SMS/EMAIL event, oldest
-   * first. Scoped strictly to the authenticated client's firm+client, so an id
-   * from another tenant resolves to 404 rather than leaking anything. Snippets
-   * are decrypted then code-masked, matching the feed's privacy contract.
+   * first. Scoped to the actor's tenant (`firmId` for staff, `firmId`+`clientId`
+   * for clients), so an id from another firm resolves to 404 rather than leaking
+   * anything. Snippets are decrypted then code-masked, matching the feed's
+   * privacy contract.
    */
   async getGroup(actor: Actor, id: string): Promise<InboxGroupDetail> {
-    const clientId = actor.clientId;
-    if (actor.role !== Role.CLIENT || !clientId) {
-      throw new ForbiddenException('No client is associated with this account');
+    const scope = this.inboxScope(actor);
+    if (!scope) {
+      throw new NotFoundException('OTP group not found');
     }
 
-    const firmId = actor.firmId ?? '__no_firm__';
     const rows = await this.prisma.otpEvent.findMany({
-      where: { firmId, clientId, OR: [{ id }, { groupId: id }] },
+      where: { ...scope.otp, OR: [{ id }, { groupId: id }] },
       orderBy: { receivedAt: 'asc' },
     });
     if (rows.length === 0) {
       throw new NotFoundException('OTP group not found');
     }
 
+    // Staff can read a group owned by any client in their firm, so resolve the
+    // client from the matched rows rather than the actor.
+    const clientId = rows[0].clientId;
     const client = await this.prisma.client.findUnique({
       where: { id: clientId },
       select: { id: true, name: true },
