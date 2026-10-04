@@ -122,6 +122,9 @@ dependencies {
         implementation jscFlavor
     }
 
+    // Encrypted storage for linked email accounts/tokens (AES256 master key).
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
     // JVM unit tests for pure-Kotlin logic (e.g. OtpExtractor). The real org.json
     // artifact shadows the stubbed android.jar so fixtures can be parsed locally.
     testImplementation("junit:junit:4.13.2")
