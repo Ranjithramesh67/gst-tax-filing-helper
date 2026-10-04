@@ -482,9 +482,9 @@ export function OtpCard({ item }: { item: Extract<InboxItem, { kind: 'OTP' }> })
 - Create: `apps/mobile/src/screens/Email/EmailSettingsScreen.tsx`
 - Modify: `apps/mobile/src/navigation/RootNavigator.tsx`, `Home` (entry point).
 
-- [ ] **Step 1: Screen** lists linked accounts (provider, address, last polled, error), an "Add IMAP account" form (address/password/host/port), enable/disable + remove, and the email-consent toggle.
-- [ ] **Step 2: Typecheck** `npm run typecheck --workspace @gstflow/mobile`.
-- [ ] **Step 3: Commit checkpoint.**
+- [x] **Step 1: Screen** lists linked accounts (provider, address, last polled, error), an "Add IMAP account" form (address/password/host/port), enable/disable + remove, and the email-consent toggle.
+- [x] **Step 2: Typecheck** `npm run typecheck --workspace @gstflow/mobile`.
+- [x] **Step 3: Commit checkpoint.**
 
 ---
 
