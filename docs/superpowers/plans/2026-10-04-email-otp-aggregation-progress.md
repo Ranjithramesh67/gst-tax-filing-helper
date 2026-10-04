@@ -26,7 +26,7 @@ Execution mode: subagent-driven-development
 | 2 | Prisma `OtpEvent` model + shared types | done (review clean) | `9df0791`, `aacd928` |
 | 3 | Extract OTPs from SMS on ingest + backfill | done (review clean after fix) | `1f7e909`, `9a924e6`, `bef1212` |
 | 4 | `POST /otp/ingest` + validation | done (review clean after fix) | `4b94840`, `666289f`, `22f7293`, `d8fb642`, `d602e1d` |
-| 5 | `GET /inbox` unified feed | pending | - |
+| 5 | `GET /inbox` unified feed | done | `36e6cae`, `32fd672`, `627fe7d` |
 | 6 | Admin OTP settings | pending | - |
 | 7 | Firm web `/sms` OTP card | pending | - |
 | 8 | Server e2e for grouping + inbox | pending | - |
@@ -45,6 +45,16 @@ Execution mode: subagent-driven-development
 ## Blocker / notes
 
 - (none blocking)
+- **Task 5 layout deviation (intentional):** the plan listed new
+  `apps/api/src/inbox/*` files, but the task brief directed `listFeed` into
+  `OtpService` and the endpoint into the OTP area. Implemented as
+  `OtpService.listFeed` + `InboxController` (`@Controller('inbox')`) registered in
+  `OtpModule`, so `AppModule` needed no change. `listFeed` scopes OTP events by
+  `firmId`+`clientId`, dedupes SMS referenced by `OtpEvent.sourceRef`, and caps the
+  in-memory over-fetch at 500 rows per source.
+- **Task 8 coverage:** `apps/api/test/otp-inbox.e2e-spec.ts` (committed under Task 5)
+  already exercises SMS+EMAIL grouping, cross-client isolation, unauthenticated 401
+  and firm-token 403, so Task 8's e2e is effectively satisfied.
 - **Commit trailer:** the repo's `prepare-commit-msg` hook auto-appends the
   `Co-authored-by: monkeycode-ai <monkeycode-ai@chaitin.com>` trailer. Do NOT add
   it manually in commit messages (it produces duplicates).
