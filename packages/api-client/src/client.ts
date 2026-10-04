@@ -34,6 +34,7 @@ import type {
   Invoice,
   ListBillingInvoicesQuery,
   ListClientsQuery,
+  ListInboxQuery,
   ListNotificationsQuery,
   ListPaymentRequestsQuery,
   ListPaymentsQuery,
@@ -53,6 +54,7 @@ import type {
   PaginatedDocuments,
   PaginatedFilings,
   PaginatedFirms,
+  PaginatedInbox,
   PaginatedInvoices,
   PaginatedNotifications,
   PaginatedPayments,
@@ -168,6 +170,10 @@ export class GstFlowApi {
     get: (id: string) => this.http.get<SmsMessage>(`/sms/${id}`),
     classify: (id: string, body: ClassifySmsBody) =>
       this.http.post<SmsMessage>(`/sms/${id}/classify`, body),
+  };
+
+  inbox = {
+    list: (query?: ListInboxQuery) => this.http.get<PaginatedInbox>('/inbox', query),
   };
 
   notifications = {

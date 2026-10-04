@@ -32,6 +32,7 @@ import type {
   SmsMessage,
   SmsProviderConfig,
   SmsRetentionPolicy,
+  OtpSource,
   Subscription,
   User,
 } from './entities';
@@ -164,6 +165,44 @@ export interface ListSmsQuery extends ListQuery {
   status?: string;
   from?: string;
   to?: string;
+}
+
+export interface ListInboxQuery extends ListQuery {
+  clientId?: string;
+  /** Applies to raw SMS rows only; OTP groups are always returned. */
+  category?: string;
+  search?: string;
+  from?: string;
+  to?: string;
+}
+
+/**
+ * Unified inbox entry. An OTP group collapses every SMS/EMAIL event carrying the
+ * same code within the grouping window into a single card; a non-OTP SMS is
+ * passed through with the standard {@link SmsMessage} shape.
+ */
+export type InboxItem =
+  | {
+      kind: 'OTP';
+      id: string;
+      code: string;
+      sources: OtpSource[];
+      client: { id: string; name: string };
+      from: string | null;
+      subject: string | null;
+      snippet: string | null;
+      receivedAt: string;
+      latestAt: string;
+      eventCount: number;
+    }
+  | ({ kind: 'SMS' } & SmsMessage);
+
+export interface PaginatedInbox {
+  items: InboxItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 export interface ListNotificationsQuery extends ListQuery {
