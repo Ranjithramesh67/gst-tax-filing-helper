@@ -201,21 +201,52 @@ class ImapConnectorTest {
 
     @Test
     fun backlogLargerThanCapDrainsAcrossPollsWithoutLoss() {
+        // 60 messages but MAX_MESSAGES == 50, so two non-empty polls must deliver
+        // everything. The batches are deliberately split across two distinct UTC
+        // days so the date half of the composite cursor has to advance as the UID
+        // filter drains past the cap. The mocked folder ignores the SearchTerm and
+        // always returns all 60 entries, so the in-memory `uid > cursorUid` filter
+        // plus the oldest-first cap is what actually drives the drain.
+        val dayOneBase = 1_700_000_000_000L // 2023-11-14T22:13:20Z
+        val dayTwoBase = dayOneBase + 86_400_000L // 2023-11-15T22:13:20Z
         val entries = (1..60).map { uid ->
-            message(uid = uid.toLong(), receivedAt = 1_700_000_000_000L + uid * 1_000L) to uid.toLong()
+            val receivedAt = if (uid <= 50) dayOneBase + uid * 1_000L else dayTwoBase + uid * 1_000L
+            message(uid = uid.toLong(), receivedAt = receivedAt) to uid.toLong()
         }
         val folder = imapFolder(*entries.toTypedArray())
 
         val collected = mutableListOf<String>()
-        var cursor: String? = null
-        repeat(3) {
+        var cursor: String? = "2023-11-13#0"
+        var polls = 0
+        val maxPolls = 5 // hard guard: fail loudly instead of hanging if drain regresses
+        while (polls < maxPolls) {
             val batch = connector.collect(folder, cursor)
-            if (batch.isEmpty()) return
+            if (batch.isEmpty()) break
             collected += batch.mapNotNull { it.cursor }
             cursor = connector.newCursor(batch)
+            polls++
         }
 
+        // The real assertion the old non-local `return` skipped: a 60-message
+        // backlog drained through a 50-message cap arrives as exactly UIDs 1..60,
+        // in order, with no loss and no duplicates.
         assertEquals((1L..60L).map { it.toString() }, collected)
+        assertEquals("no UID may be re-delivered", collected.size, collected.toSet().size)
+        // Lossless drain regression tripwire: 50 + 10 takes exactly 2 non-empty
+        // polls, then a third empty poll, and the persisted cursor is max UID 60.
+        assertEquals(2, polls)
+        assertEquals("2023-11-15#60", cursor)
+
+        // Capture every SINCE term in call order and prove the date half of the
+        // cursor advances past the day-one batch (drain-vs-cursor-date wiring).
+        val sinceDates = capturedTerms(folder).map { it.date }
+        assertEquals(3, sinceDates.size) // one per collect() call, including the final empty one
+        assertTrue(
+            "SINCE date must advance between polls, got $sinceDates",
+            sinceDates.zipWithNext().all { (earlier, later) -> earlier.before(later) },
+        )
+        assertEquals(parseDate("2023-11-13"), sinceDates.first())
+        assertEquals(parseDate("2023-11-15"), sinceDates.last())
     }
 
     @Test
@@ -247,6 +278,13 @@ class ImapConnectorTest {
         val captor = ArgumentCaptor.forClass(SearchTerm::class.java)
         Mockito.verify(folder).search(captor.capture())
         return captor.value as ReceivedDateTerm
+    }
+
+    /** All captured SINCE terms in invocation order (one per `collect` call). */
+    private fun capturedTerms(folder: IMAPFolder): List<ReceivedDateTerm> {
+        val captor = ArgumentCaptor.forClass(SearchTerm::class.java)
+        Mockito.verify(folder, Mockito.atLeast(1)).search(captor.capture())
+        return captor.allValues.map { it as ReceivedDateTerm }
     }
 
     private fun message(
