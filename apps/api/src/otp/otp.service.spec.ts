@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 
 import type { CryptoService } from '../common/crypto/crypto.service';
 import type { PrismaService } from '../prisma/prisma.service';
+import { runOtpBackfill } from './backfill-otp';
 import { groupKeyFor, OtpService } from './otp.service';
 
 describe('groupKeyFor', () => {
@@ -123,5 +124,70 @@ describe('OtpService', () => {
     );
     const service = new OtpService(prisma, buildCrypto());
     await expect(service.recordFromSms(input)).rejects.toThrow();
+  });
+
+  it('decrypts a stored snippet for reads and passes null through', () => {
+    const service = new OtpService(buildPrisma(), buildCrypto());
+    expect(service.decryptSnippet('enc:abc')).toBe('abc');
+    expect(service.decryptSnippet(null)).toBeNull();
+  });
+});
+
+describe('runOtpBackfill', () => {
+  function buildBackfillPrisma() {
+    return {
+      smsMessage: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'sms-1',
+            clientId: 'client-1',
+            deviceId: null,
+            bodyEncrypted: 'enc:Your OTP is 111111 now',
+            receivedAt: input.receivedAt,
+            client: { firmId: 'firm-1' },
+          },
+          {
+            id: 'sms-2',
+            clientId: 'client-1',
+            deviceId: null,
+            bodyEncrypted: 'enc:Your OTP is 222222 now',
+            receivedAt: input.receivedAt,
+            client: { firmId: 'firm-1' },
+          },
+          {
+            id: 'sms-3',
+            clientId: 'client-1',
+            deviceId: null,
+            bodyEncrypted: 'enc:Your order has shipped',
+            receivedAt: input.receivedAt,
+            client: { firmId: 'firm-1' },
+          },
+        ]),
+      },
+      otpEvent: { findMany: jest.fn().mockResolvedValue([{ sourceRef: 'sms-1' }]) },
+    };
+  }
+
+  it('skips already-captured SMS and inserts newly extracted OTPs idempotently', async () => {
+    const prisma = buildBackfillPrisma();
+    const crypto = buildCrypto();
+    const otp = {
+      groupWindowSeconds: jest.fn().mockResolvedValue(300),
+      recordFromSms: jest.fn().mockResolvedValue(undefined),
+    };
+    const logger = { log: jest.fn(), warn: jest.fn() };
+
+    const result = await runOtpBackfill(
+      prisma as unknown as Parameters<typeof runOtpBackfill>[0],
+      otp as unknown as OtpService,
+      crypto,
+      logger,
+    );
+
+    expect(result).toEqual({ scanned: 3, extracted: 1, inserted: 1, skipped: 1, failed: 0 });
+    expect(otp.recordFromSms).toHaveBeenCalledTimes(1);
+    expect(otp.recordFromSms).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceRef: 'sms-2', code: '222222', firmId: 'firm-1' }),
+    );
   });
 });
