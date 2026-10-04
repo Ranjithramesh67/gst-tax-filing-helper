@@ -100,7 +100,7 @@ import type {
   UpdateUserBody,
   User,
 } from '@gstflow/types';
-import { ApiClient, type ApiClientConfig, RequestOptions } from './http';
+import { ApiClient, type ApiClientConfig, type TokenPair, RequestOptions } from './http';
 
 export class GstFlowApi {
   readonly http: ApiClient;
@@ -108,6 +108,12 @@ export class GstFlowApi {
   constructor(config: ApiClientConfig) {
     this.http = new ApiClient(config);
   }
+
+  /** Seeds the in-memory token cache; call right after sign-in. */
+  setTokens = (tokens: TokenPair): void => this.http.setTokens(tokens);
+
+  /** Drops the in-memory token cache; call on sign-out. */
+  clearTokens = (): void => this.http.clearTokens();
 
   health = () => this.http.get<{ status: string; uptime: number }>('/health');
 

@@ -21,11 +21,17 @@ export const api = new GstFlowApi({
     const session = await getStoredSession();
     return session?.refreshToken ?? null;
   },
-  onTokensRefreshed: (tokens) => {
-    void updateStoredTokens(tokens);
+  onTokensRefreshed: async (tokens) => {
+    // Must be awaited: the ApiClient retries the failed request as soon as this
+    // resolves, so the rotated tokens have to be persisted first.
+    await updateStoredTokens(tokens);
     // Keep the native uploader's token current so background forwards keep
     // working after the short-lived access token rolls over.
-    void SmsReader.setSyncCredentials(tokens.accessToken);
+    try {
+      await SmsReader.setSyncCredentials(tokens.accessToken);
+    } catch {
+      void 0;
+    }
   },
   onUnauthorized: () => {
     void clearStoredSession();

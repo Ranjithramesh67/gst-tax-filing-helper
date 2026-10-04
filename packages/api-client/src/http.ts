@@ -4,7 +4,7 @@ export interface ApiClientConfig {
   baseUrl: string;
   getAccessToken?: () => string | null | undefined | Promise<string | null | undefined>;
   getRefreshToken?: () => string | null | undefined | Promise<string | null | undefined>;
-  onTokensRefreshed?: (tokens: { accessToken: string; refreshToken: string }) => void;
+  onTokensRefreshed?: (tokens: { accessToken: string; refreshToken: string }) => void | Promise<void>;
   onUnauthorized?: () => void;
   fetchImpl?: typeof fetch;
 }
@@ -47,12 +47,34 @@ function buildQuery(query?: QueryParams): string {
   return parts.length > 0 ? `?${parts.join('&')}` : '';
 }
 
+export interface TokenPair {
+  accessToken: string;
+  refreshToken: string;
+}
+
 export class ApiClient {
   private config: ApiClientConfig;
   private refreshPromise: Promise<boolean> | null = null;
+  /**
+   * Tokens live in memory after a refresh. Relying only on the async storage
+   * callback is racy: the retried request could read the previous (now expired)
+   * access token before `onTokensRefreshed` finishes persisting, triggering a
+   * second refresh with the rotated-away refresh token and logging the user out.
+   */
+  private currentTokens: TokenPair | null = null;
 
   constructor(config: ApiClientConfig) {
     this.config = config;
+  }
+
+  /** Seeds the in-memory token cache (e.g. right after sign-in). */
+  setTokens(tokens: TokenPair): void {
+    this.currentTokens = tokens;
+  }
+
+  /** Drops the in-memory token cache (e.g. on sign-out or failed refresh). */
+  clearTokens(): void {
+    this.currentTokens = null;
   }
 
   private get fetchImpl(): typeof fetch {
@@ -60,9 +82,19 @@ export class ApiClient {
     return (...args: Parameters<typeof fetch>) => fetch(...args);
   }
 
+  private async accessToken(): Promise<string | null | undefined> {
+    if (this.currentTokens) return this.currentTokens.accessToken;
+    return this.config.getAccessToken?.();
+  }
+
+  private async refreshToken(): Promise<string | null | undefined> {
+    if (this.currentTokens) return this.currentTokens.refreshToken;
+    return this.config.getRefreshToken?.();
+  }
+
   private async authHeader(skipAuth?: boolean): Promise<Record<string, string>> {
     if (skipAuth) return {};
-    const token = await this.config.getAccessToken?.();
+    const token = await this.accessToken();
     return token ? { Authorization: `Bearer ${token}` } : {};
   }
 
@@ -96,6 +128,7 @@ export class ApiClient {
       if (refreshed) {
         res = await doFetch();
       } else {
+        this.currentTokens = null;
         this.config.onUnauthorized?.();
       }
     }
@@ -121,7 +154,7 @@ export class ApiClient {
     if (this.refreshPromise) return this.refreshPromise;
     this.refreshPromise = (async () => {
       try {
-        const refreshToken = await this.config.getRefreshToken?.();
+        const refreshToken = await this.refreshToken();
         if (!refreshToken) return false;
         const res = await this.fetchImpl(`${this.config.baseUrl}/auth/refresh`, {
           method: 'POST',
@@ -129,8 +162,17 @@ export class ApiClient {
           body: JSON.stringify({ refreshToken }),
         });
         if (!res.ok) return false;
-        const tokens = (await res.json()) as { accessToken: string; refreshToken: string };
-        this.config.onTokensRefreshed?.(tokens);
+        const tokens = (await res.json()) as TokenPair;
+        // Publish the new tokens in memory first so any retried request uses
+        // them immediately, then persist and only resolve afterwards. A
+        // persistence failure must never turn a successful refresh into a
+        // forced logout, so it is swallowed.
+        this.currentTokens = tokens;
+        try {
+          await this.config.onTokensRefreshed?.(tokens);
+        } catch {
+          void 0;
+        }
         return true;
       } catch {
         return false;

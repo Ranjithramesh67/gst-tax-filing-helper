@@ -78,6 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
       client: result.client ?? null,
     };
     await setStoredSession(next);
+    api.setTokens({ accessToken: next.accessToken, refreshToken: next.refreshToken });
     if (result.consent) {
       await setStoredConsent({
         version: result.consent.version,
@@ -111,6 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
         void 0;
       }
     }
+    api.clearTokens();
     await clearStoredSession();
     await clearStoredConsent();
     await clearReadingEnabled();

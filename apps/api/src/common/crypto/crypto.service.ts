@@ -29,9 +29,16 @@ export class CryptoService {
 
   decrypt(payload: string): string {
     const buffer = Buffer.from(payload, 'base64');
+    const envelopeLength = IV_LENGTH + 16;
+    if (buffer.length < envelopeLength) {
+      // Not an AES-256-GCM envelope. Seed/legacy rows may store a plaintext
+      // value; return it unchanged instead of failing (and warning) on every
+      // read. Genuine ciphertext is always at least IV + auth-tag bytes long.
+      return payload;
+    }
     const iv = buffer.subarray(0, IV_LENGTH);
-    const tag = buffer.subarray(IV_LENGTH, IV_LENGTH + 16);
-    const ciphertext = buffer.subarray(IV_LENGTH + 16);
+    const tag = buffer.subarray(IV_LENGTH, envelopeLength);
+    const ciphertext = buffer.subarray(envelopeLength);
     const decipher = createDecipheriv('aes-256-gcm', this.key, iv);
     decipher.setAuthTag(tag);
     return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
