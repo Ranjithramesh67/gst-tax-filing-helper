@@ -33,7 +33,7 @@ interface FormState {
   route: string;
   templateId: string;
   header: string;
-  credentialsJson: string;
+  apiKey: string;
   messageTemplate: string;
   appName: string;
   variablesJson: string;
@@ -50,7 +50,7 @@ const EMPTY_FORM: FormState = {
   route: '4',
   templateId: '1207170351303889084',
   header: '',
-  credentialsJson: '',
+  apiKey: '',
   messageTemplate:
     'Hi, Your OTP to Login into {{app name}} App is {{variable}}. ' +
     "This OTP is sent by Ranji, Please don't share this OTP with anyone. " +
@@ -83,7 +83,7 @@ function fromProvider(provider: SmsProviderConfig): FormState {
     route: provider.route ?? '',
     templateId: provider.templateId ?? '',
     header: provider.header ?? '',
-    credentialsJson: '',
+    apiKey: '',
     messageTemplate: provider.messageTemplate,
     appName: provider.appName,
     variablesJson: provider.variables ? JSON.stringify(provider.variables, null, 2) : '',
@@ -139,7 +139,7 @@ export default function SmsGatewayPage() {
         appName: form.appName.trim(),
         timeoutMs: Number(form.timeoutMs) || undefined,
         variables: parseJsonObject(form.variablesJson, 'Variables'),
-        credentials: parseJsonObject(form.credentialsJson, 'Credentials'),
+        credentials: form.apiKey.trim() ? { key: form.apiKey.trim() } : undefined,
       };
       return api.admin.smsProviders.test({
         numbers,
@@ -165,7 +165,7 @@ export default function SmsGatewayPage() {
   function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     try {
-      const credentials = parseJsonObject(form.credentialsJson, 'Credentials');
+      const credentials = form.apiKey.trim() ? { key: form.apiKey.trim() } : undefined;
       const variables = parseJsonObject(form.variablesJson, 'Variables');
       const body: UpdateSmsProviderBody = {
         name: form.name.trim(),
@@ -276,19 +276,22 @@ export default function SmsGatewayPage() {
           </div>
 
           <Field
-            label="Credentials (JSON)"
+            label="API key"
             hint={
               form.id
                 ? currentCredentialHint(items, form.id)
-                : 'e.g. {"key":"your-api-key"}'
+                : 'Provider API key sent as credentials.key (e.g. ping4sms key)'
             }
           >
-            <textarea
-              value={form.credentialsJson}
-              onChange={(e) => update('credentialsJson', e.target.value)}
-              rows={2}
-              placeholder={form.id ? 'Leave blank to keep the existing credentials' : '{"key":"..."}'}
-              className="w-full rounded-md border border-ink-600 bg-ink-800 px-3 py-2 font-mono text-xs text-slate-100 placeholder:text-slate-500 outline-none focus:border-brand-500"
+            <Input
+              type="password"
+              autoComplete="off"
+              value={form.apiKey}
+              onChange={(e) => update('apiKey', e.target.value)}
+              placeholder={
+                form.id ? 'Leave blank to keep the existing key' : 'Enter the provider API key'
+              }
+              required={!form.id}
             />
           </Field>
 
