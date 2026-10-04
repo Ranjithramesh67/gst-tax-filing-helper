@@ -56,13 +56,14 @@ export class OtpService {
   }
 
   private async resolveGroup(
+    firmId: string,
     clientId: string,
     code: string,
     receivedAt: Date,
   ): Promise<string | null> {
     const windowSeconds = await this.groupWindowSeconds();
     const previous = await this.prisma.otpEvent.findFirst({
-      where: { clientId, code, groupId: { not: null } },
+      where: { firmId, clientId, code, groupId: { not: null } },
       orderBy: { receivedAt: 'desc' },
       select: { groupId: true, receivedAt: true },
     });
@@ -80,7 +81,8 @@ export class OtpService {
    */
   async recordFromSms(input: RecordOtpFromSmsInput): Promise<void> {
     const groupId =
-      (await this.resolveGroup(input.clientId, input.code, input.receivedAt)) ?? undefined;
+      (await this.resolveGroup(input.firmId, input.clientId, input.code, input.receivedAt)) ??
+      undefined;
     try {
       const created = await this.prisma.otpEvent.create({
         data: {

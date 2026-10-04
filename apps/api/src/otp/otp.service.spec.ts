@@ -102,6 +102,23 @@ describe('OtpService', () => {
     expect(prisma.otpEvent.update).not.toHaveBeenCalled();
   });
 
+  it('scopes group resolution to the firm as well as the client', async () => {
+    const prisma = buildPrisma();
+    const service = new OtpService(prisma, buildCrypto());
+
+    await service.recordFromSms(input);
+
+    expect(prisma.otpEvent.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          firmId: 'firm-1',
+          clientId: 'client-1',
+          code: '123456',
+        }),
+      }),
+    );
+  });
+
   it('swallows a P2002 unique violation as a duplicate', async () => {
     const prisma = buildPrisma();
     (prisma.otpEvent.create as jest.Mock).mockRejectedValue(

@@ -272,15 +272,23 @@ export class SmsService {
           await this.persistParsed(created.id, item.body);
           const otp = extractOtp(item.body);
           if (otp) {
-            await this.otp.recordFromSms({
-              firmId: firmOfClient.get(targetId)!,
-              clientId: targetId,
-              deviceId,
-              code: otp.code,
-              snippet: otp.snippet,
-              receivedAt,
-              sourceRef: created.id,
-            });
+            try {
+              await this.otp.recordFromSms({
+                firmId: firmOfClient.get(targetId)!,
+                clientId: targetId,
+                deviceId,
+                code: otp.code,
+                snippet: otp.snippet,
+                receivedAt,
+                sourceRef: created.id,
+              });
+            } catch (otpError) {
+              // OTP capture is best-effort: a failure here must never fail the
+              // SMS ingest nor prevent filing reconciliation below.
+              this.logger.warn(
+                `Failed to record OTP from SMS (firm=${firmOfClient.get(targetId)}, client=${targetId}, sms=${created.id}): ${String(otpError)}`,
+              );
+            }
           }
           await this.reconcileFiling(created.id, targetId, item.body, receivedAt);
         } catch (error) {
