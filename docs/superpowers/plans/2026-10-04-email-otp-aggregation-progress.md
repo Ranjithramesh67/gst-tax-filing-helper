@@ -28,7 +28,7 @@ Execution mode: subagent-driven-development
 | 4 | `POST /otp/ingest` + validation | done (review clean after fix) | `4b94840`, `666289f`, `22f7293`, `d8fb642`, `d602e1d` |
 | 5 | `GET /inbox` unified feed | done (review clean after correction) | `36e6cae`, `32fd672`, `627fe7d`, `61b1fc2` |
 | 6 | Admin OTP settings | done (review clean) | `cf55c3d`, `e83b589`, `c0dcb59`, `70800b4`, `38e0244`, `13f6e12` |
-| 7 | Firm web `/sms` OTP card | done (pending review) | `39a09b0`, `88d192d`, `37280ac` |
+| 7 | Firm web `/sms` OTP card | done (review clean) | `39a09b0`, `88d192d`, `37280ac`, `0da3f63` |
 | 8 | Server e2e for grouping + inbox | pending | - |
 | 9 | Kotlin OTP extractor (parity) | pending | - |
 | 10 | Encrypted account store + registry | pending | - |
