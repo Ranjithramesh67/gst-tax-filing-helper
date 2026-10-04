@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { Building2, LayoutDashboard, LogOut, MessageSquare, ScrollText, Settings, ShieldCheck, Smartphone, Users, Wallet } from 'lucide-react';
+import { Building2, Inbox, LayoutDashboard, LogOut, MessageSquare, ScrollText, Settings, ShieldCheck, Smartphone, Users, Wallet } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/components/ui';
 
@@ -15,6 +15,7 @@ const NAV = [
   { href: '/roles', label: 'Roles', icon: ShieldCheck },
   { href: '/releases', label: 'App Releases', icon: Smartphone },
   { href: '/sms-gateway', label: 'SMS Gateway', icon: MessageSquare },
+  { href: '/message-logs', label: 'SMS Messages', icon: Inbox },
   { href: '/settings', label: 'Settings', icon: Settings },
   { href: '/audit', label: 'Audit Log', icon: ScrollText },
 ];

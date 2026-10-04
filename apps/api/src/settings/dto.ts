@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import { smsRetentionSchema } from '@gstflow/validation';
+import { smsKeywordSchema, smsRetentionSchema } from '@gstflow/validation';
 
 export type UpdateSmsRetentionInput = z.infer<typeof smsRetentionSchema>;
+export type UpdateSmsKeywordInput = z.infer<typeof smsKeywordSchema>;
 
-export { smsRetentionSchema };
+export { smsKeywordSchema, smsRetentionSchema };

@@ -65,7 +65,7 @@ class SmsForegroundService : Service() {
                 val sender = intent.getStringExtra(EXTRA_SENDER).orEmpty()
                 val body = intent.getStringExtra(EXTRA_BODY).orEmpty()
                 val timestamp = intent.getLongExtra(EXTRA_TIMESTAMP, System.currentTimeMillis())
-                if (body.isNotEmpty() && GstFilter.isGstRelated(body, sender)) {
+                if (body.isNotEmpty() && SmsKeywords.matches(this, body, sender)) {
                     val sms = IncomingSms(sender, body, timestamp)
                     // Hand the message to JS when the app is alive (drives the
                     // in-app queue/log). Delivery, however, must not depend on

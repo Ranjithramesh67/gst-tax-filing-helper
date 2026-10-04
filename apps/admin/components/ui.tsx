@@ -1,5 +1,11 @@
 import { clsx } from 'clsx';
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
+import type {
+  ButtonHTMLAttributes,
+  InputHTMLAttributes,
+  ReactNode,
+  SelectHTMLAttributes,
+  TextareaHTMLAttributes,
+} from 'react';
 
 export function cn(...classes: Array<string | false | null | undefined>): string {
   return clsx(classes);
@@ -33,6 +39,18 @@ export function Button({
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
+      className={cn(
+        'w-full rounded-md border border-ink-600 bg-ink-800 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return (
+    <textarea
       className={cn(
         'w-full rounded-md border border-ink-600 bg-ink-800 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500',
         className,

@@ -1,5 +1,6 @@
 import { PaymentMethod, PaymentStatus, Role, RoleScope, SmsProviderKind } from './enums';
 import type {
+  AdminSmsMessage,
   AppNotification,
   AppRelease,
   AuditLog,
@@ -27,6 +28,7 @@ import type {
   PermissionGroup,
   PublicPaymentRequest,
   RoleDefinition,
+  SmsKeywordConfig,
   SmsMessage,
   SmsProviderConfig,
   SmsRetentionPolicy,
@@ -320,6 +322,14 @@ export interface UpdateSmsRetentionBody {
 
 export type PublicRetentionPolicy = SmsRetentionPolicy;
 
+export interface UpdateSmsKeywordBody {
+  bodyKeywords: string[];
+  headerKeywords: string[];
+  hideAfterForward: boolean;
+}
+
+export type PublicSmsKeywordConfig = SmsKeywordConfig;
+
 export interface CreateGstReturnBody {
   clientId: string;
   type: GstReturn['type'];
@@ -468,6 +478,7 @@ export interface UpdateFilingStatusBody {
 
 export type PaginatedClients = Paginated<Client>;
 export type PaginatedSms = Paginated<SmsMessage>;
+export type PaginatedAdminSms = Paginated<AdminSmsMessage>;
 export type PaginatedDocuments = Paginated<Document>;
 export type PaginatedReturns = Paginated<GstReturn>;
 export type PaginatedFilings = Paginated<Filing>;

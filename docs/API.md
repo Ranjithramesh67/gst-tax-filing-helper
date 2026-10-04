@@ -233,6 +233,28 @@ Notes: when `enabled`, the scheduler archives and purges on boot and every
 entirely. `POST .../run` performs the same work immediately regardless of the
 `enabled` flag.
 
+## SMS keyword whitelist and message viewer (super admin)
+
+Devices only forward a message when its body contains one of the body keywords or
+its sender/header contains one of the header keywords (case-insensitive). The
+whitelist is a global platform setting, mirrored to each device by the mobile app
+and applied natively even while the app is killed. When nothing is configured the
+legacy rule (body contains `gst`) applies; an explicitly empty body list forwards
+nothing.
+
+| Method | Path | Auth | Key request fields | Response |
+|---|---|---|---|---|
+| GET | `/admin/settings/sms-keywords` | `SUPER_ADMIN` | - | `SmsKeywordConfig` |
+| PUT | `/admin/settings/sms-keywords` | `SUPER_ADMIN` | `bodyKeywords[]`, `headerKeywords[]`, `hideAfterForward` | `SmsKeywordConfig` |
+| GET | `/public/sms-keywords` | public | - | `SmsKeywordConfig` (fetched by the mobile app) |
+| GET | `/admin/sms` | `SUPER_ADMIN` | query: `firmId?`, `clientId?`, `search?`, `category?`, `status?`, `from?`, `to?`, `page?`, `pageSize?` | `Paginated<AdminSmsMessage>` |
+
+Notes: keywords are trimmed, blank-stripped and de-duplicated case-insensitively on
+save. `hideAfterForward` asks the device to abort the SMS broadcast after forwarding;
+this only takes effect when GSTFlow is the device's default SMS app. `GET /admin/sms`
+returns every forwarded message across all firms with the originating firm and client,
+for super-admin oversight.
+
 ## Enums
 
 - `Role`: `SUPER_ADMIN`, `FIRM_ADMIN`, `FILER`, `CLIENT`

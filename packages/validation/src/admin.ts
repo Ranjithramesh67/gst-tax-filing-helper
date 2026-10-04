@@ -163,3 +163,11 @@ export const smsRetentionSchema = z
     message: 'purgeBackupAfterDays must be greater than or equal to archiveAfterDays',
     path: ['purgeBackupAfterDays'],
   });
+
+const keywordItemSchema = z.string().trim().min(1).max(60);
+
+export const smsKeywordSchema = z.object({
+  bodyKeywords: z.array(keywordItemSchema).max(100),
+  headerKeywords: z.array(keywordItemSchema).max(100),
+  hideAfterForward: z.boolean(),
+});

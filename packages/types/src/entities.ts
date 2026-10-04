@@ -200,6 +200,30 @@ export interface SmsRetentionRunResult {
   policy: SmsRetentionPolicy;
 }
 
+export interface SmsKeywordConfig {
+  bodyKeywords: string[];
+  headerKeywords: string[];
+  hideAfterForward: boolean;
+  updatedAt?: string | null;
+}
+
+export interface AdminSmsMessage {
+  id: string;
+  clientId: string;
+  clientName?: string | null;
+  clientGstin?: string | null;
+  firmId?: string | null;
+  firmName?: string | null;
+  firmSlug?: string | null;
+  deviceId?: string | null;
+  sender: string;
+  body: string;
+  receivedAt: string;
+  category: SmsCategory;
+  status: SmsStatus;
+  createdAt: string;
+}
+
 export interface ParsedGstData {
   id: string;
   smsMessageId: string;

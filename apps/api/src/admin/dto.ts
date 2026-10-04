@@ -4,6 +4,7 @@ import {
   createReleaseSchema,
   createUserSchema,
   roleSchema,
+  smsCategorySchema,
   smsProviderInputSchema,
   smsTestSchema,
   updateFirmSchema,
@@ -63,3 +64,17 @@ export type ListFirmsQuery = z.infer<typeof listFirmsQuerySchema>;
 export type ListUsersQuery = z.infer<typeof listUsersQuerySchema>;
 export type ListReleasesQuery = z.infer<typeof listReleasesQuerySchema>;
 export type ListAuditQuery = z.infer<typeof listAuditQuerySchema>;
+
+export const listSmsQuerySchema = z.object({
+  page: pageField,
+  pageSize: pageSizeField,
+  firmId: z.string().trim().min(1).optional(),
+  clientId: z.string().trim().min(1).optional(),
+  search: z.string().trim().max(200).optional(),
+  category: smsCategorySchema.optional(),
+  status: z.enum(['RECEIVED', 'REVIEWED', 'FILED', 'IGNORED', 'FAILED']).optional(),
+  from: z.coerce.date().optional(),
+  to: z.coerce.date().optional(),
+});
+
+export type ListSmsQuery = z.infer<typeof listSmsQuerySchema>;

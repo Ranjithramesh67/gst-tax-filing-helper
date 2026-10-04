@@ -1,5 +1,6 @@
 import { AppState, type AppStateStatus } from 'react-native';
 import { SmsReader, type ReceivedSms } from '@/native/SmsReader';
+import { api } from './api';
 import * as queue from './smsQueue';
 import { getReadingEnabled } from './storage';
 import { hasConsent, startAutoSync, syncNow } from './smsSync';
@@ -46,6 +47,24 @@ function requestSync(): void {
 }
 
 /**
+ * Pulls the server-managed keyword whitelist and mirrors it to the native SMS
+ * receiver so background filtering matches what the super admin configured.
+ * Failures are ignored: the previously mirrored keywords stay in effect.
+ */
+export async function refreshSmsKeywords(): Promise<void> {
+  try {
+    const config = await api.public.smsKeywords();
+    await SmsReader.setSmsKeywords(
+      config.bodyKeywords,
+      config.headerKeywords,
+      config.hideAfterForward,
+    );
+  } catch {
+    // Offline or server unavailable: keep the last known keywords.
+  }
+}
+
+/**
  * Starts the app-wide collector. Mirrors consent (gated by the persisted reading
  * flag) to the native layer, drains buffered SMS, backfills the inbox, and runs
  * app-lifetime auto-sync so captured messages are sent without a manual tap.
@@ -72,6 +91,7 @@ export function startSmsCollector(): () => void {
       } catch {
         // READ_SMS may not be granted yet.
       }
+      void refreshSmsKeywords();
       requestSync();
     })();
   };
@@ -84,6 +104,7 @@ export function startSmsCollector(): () => void {
         getReadingEnabled(),
       ]);
       await SmsReader.setConsent(consented && readingEnabled);
+      await refreshSmsKeywords();
       if (consented && readingEnabled) {
         await SmsReader.startListening();
       }

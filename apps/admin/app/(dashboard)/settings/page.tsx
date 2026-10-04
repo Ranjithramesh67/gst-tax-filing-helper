@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Archive, Database, Play, Save, ShieldCheck } from 'lucide-react';
-import type { UpdateSmsRetentionBody } from '@gstflow/types';
+import { Archive, Database, Play, Save, ShieldCheck, Tags } from 'lucide-react';
+import type { UpdateSmsKeywordBody, UpdateSmsRetentionBody } from '@gstflow/types';
 import { api } from '@/lib/api';
 import {
   Badge,
@@ -14,9 +14,11 @@ import {
   Input,
   PageHeader,
   Spinner,
+  Textarea,
 } from '@/components/ui';
 
 const RETENTION_KEY = ['admin', 'settings', 'sms-retention'];
+const KEYWORDS_KEY = ['admin', 'settings', 'sms-keywords'];
 
 interface FormState {
   enabled: boolean;
@@ -182,6 +184,8 @@ export default function SettingsPage() {
         )}
       </Card>
 
+      <SmsKeywordsCard />
+
       <Card className="mt-6">
         <CardHeader
           title="Current data"
@@ -215,6 +219,128 @@ export default function SettingsPage() {
         </div>
       </Card>
     </div>
+  );
+}
+
+function SmsKeywordsCard() {
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState<{ body: string; header: string; hide: boolean } | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const config = useQuery({
+    queryKey: KEYWORDS_KEY,
+    queryFn: () => api.admin.settings.smsKeywords.get(),
+  });
+
+  useEffect(() => {
+    if (config.data && form === null) {
+      setForm({
+        body: config.data.bodyKeywords.join('\n'),
+        header: config.data.headerKeywords.join('\n'),
+        hide: config.data.hideAfterForward,
+      });
+    }
+  }, [config.data, form]);
+
+  const save = useMutation({
+    mutationFn: (body: UpdateSmsKeywordBody) => api.admin.settings.smsKeywords.update(body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: KEYWORDS_KEY });
+      setError(null);
+      setMessage('Keyword rules saved. Devices pick them up on their next sync.');
+    },
+    onError: (err) => {
+      setMessage(null);
+      setError(err instanceof Error ? err.message : 'Failed to save keyword rules');
+    },
+  });
+
+  function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!form) return;
+    const split = (value: string) =>
+      value
+        .split(/[\n,]/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+    setMessage(null);
+    save.mutate({
+      bodyKeywords: split(form.body),
+      headerKeywords: split(form.header),
+      hideAfterForward: form.hide,
+    });
+  }
+
+  return (
+    <Card className="mt-6">
+      <CardHeader
+        title="SMS keyword whitelist"
+        action={
+          <Badge tone="neutral">
+            {config.data
+              ? `${config.data.bodyKeywords.length} body / ${config.data.headerKeywords.length} sender`
+              : 'Loading'}
+          </Badge>
+        }
+      />
+      {config.isLoading || !form ? (
+        <Spinner label="Loading keywords..." />
+      ) : (
+        <form onSubmit={onSubmit} className="space-y-4 px-4 py-5">
+          <p className="text-sm text-slate-400">
+            Only messages whose body contains one of these keywords, or whose sender matches one of
+            the sender keywords, are forwarded from the client app to the linked firm. Leave the body
+            list empty to forward nothing. Matching is case-insensitive and applied on the device.
+          </p>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field
+              label="Body keywords"
+              hint="One per line (comma separated also works). Example: gst, gstin, arn."
+            >
+              <Textarea
+                rows={6}
+                value={form.body}
+                onChange={(e) => setForm({ ...form, body: e.target.value })}
+                placeholder="gst"
+              />
+            </Field>
+            <Field
+              label="Sender / header keywords"
+              hint="Match the SMS sender ID. Example: GSTN, VHOMEE, IPAY."
+            >
+              <Textarea
+                rows={6}
+                value={form.header}
+                onChange={(e) => setForm({ ...form, header: e.target.value })}
+                placeholder="GSTN"
+              />
+            </Field>
+          </div>
+
+          <label className="flex items-center gap-2 text-sm text-slate-300">
+            <input
+              type="checkbox"
+              checked={form.hide}
+              onChange={(e) => setForm({ ...form, hide: e.target.checked })}
+              className="h-4 w-4 rounded border-ink-600 text-brand-600"
+            />
+            Ask the device to hide matched SMS after forwarding
+          </label>
+
+          {error ? <p className="text-sm text-red-400">{error}</p> : null}
+          {message ? <p className="text-sm text-green-400">{message}</p> : null}
+
+          <div className="flex justify-end">
+            <Button type="submit" disabled={save.isPending}>
+              <Tags className="h-4 w-4" />
+              {save.isPending ? 'Saving...' : 'Save keywords'}
+            </Button>
+          </div>
+        </form>
+      )}
+    </Card>
   );
 }
 

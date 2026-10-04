@@ -195,8 +195,18 @@ object SmsPermissions {
  * Manifest-declared receiver for android.provider.Telephony.SMS_RECEIVED.
  *
  * The consent gate is enforced here first: when consent is off (or was revoked)
- * nothing is extracted, buffered or forwarded. Only GST/tax keyword-matched
- * messages proceed to the foreground service, which hands them to JS.
+ * nothing is extracted, buffered or forwarded. Messages are then matched against
+ * the server-managed keyword whitelist.
+ *
+ * Reliability: `goAsync()` keeps the process alive briefly so the message can be
+ * handed to JS (when alive) and uploaded. A foreground service cannot be started
+ * from the background on Android 12+, so any upload that does not succeed is put
+ * in a durable outbox and retried by [SmsRetryJobService], which also survives
+ * the app being killed.
+ *
+ * Hiding the message after forwarding (`abortBroadcast`) only takes effect when
+ * GSTFlow is the device's default SMS app; the attempt is guarded so a
+ * non-default install is unaffected.
  */
 class SmsBroadcastReceiver : BroadcastReceiver() {
 
@@ -220,6 +230,8 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             null
         } ?: return
 
+        val config = SmsKeywords.get(context)
+
         // Reassemble multipart messages: parts share sender + timestamp.
         data class Part(val sender: String, val timestamp: Long, val body: StringBuilder)
 
@@ -232,31 +244,62 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             grouped.getOrPut(key) { Part(sender, timestamp, StringBuilder()) }.body.append(body)
         }
 
+        val matched = ArrayList<IncomingSms>(grouped.size)
         for (part in grouped.values) {
             val body = part.body.toString()
-            if (!GstFilter.isGstRelated(body, part.sender)) {
-                Log.d(TAG, "Skipping non-GST SMS from ${part.sender}")
+            if (!SmsKeywords.matches(config, body, part.sender)) {
+                Log.d(TAG, "Skipping SMS from ${part.sender}: no keyword match")
                 continue
             }
-            forwardToService(context, part.sender, body, part.timestamp)
+            matched.add(IncomingSms(part.sender, body, part.timestamp))
         }
+        if (matched.isEmpty()) return
+
+        // When configured, and only when we own the SMS role, prevent the matched
+        // message from reaching the rest of the SMS stack (hiding it). This must
+        // happen while the broadcast is still active.
+        if (config.hide && isDefaultSmsApp(context)) {
+            try {
+                abortBroadcast()
+                Log.i(TAG, "Aborted matched SMS broadcast (app is default SMS app)")
+            } catch (error: Exception) {
+                Log.w(TAG, "Unable to abort SMS broadcast: ${error.message}")
+            }
+        }
+
+        val pendingResult = goAsync()
+        Thread {
+            try {
+                for (sms in matched) {
+                    // In-app/log delivery when JS is attached; buffered otherwise.
+                    SmsReaderModule.dispatch(context, sms)
+                    val uploaded = SmsUploader.upload(context, sms, RECEIVER_CONNECT_TIMEOUT_MS, RECEIVER_READ_TIMEOUT_MS)
+                    if (!uploaded) {
+                        SmsOutbox.add(context, sms)
+                    }
+                }
+                if (SmsOutbox.size(context) > 0) SmsRetryJobService.schedule(context)
+            } catch (error: Exception) {
+                Log.w(TAG, "Async SMS handling failed: ${error.message}")
+                SmsRetryJobService.schedule(context)
+            } finally {
+                pendingResult.finish()
+            }
+        }.start()
     }
 
-    private fun forwardToService(context: Context, sender: String, body: String, timestamp: Long) {
-        val serviceIntent = Intent(context, SmsForegroundService::class.java).apply {
-            action = SmsForegroundService.ACTION_INGEST
-            putExtra(SmsForegroundService.EXTRA_SENDER, sender)
-            putExtra(SmsForegroundService.EXTRA_BODY, body)
-            putExtra(SmsForegroundService.EXTRA_TIMESTAMP, timestamp)
-        }
-        try {
-            ContextCompat.startForegroundService(context, serviceIntent)
-        } catch (error: Exception) {
-            Log.w(TAG, "Unable to start foreground service: ${error.message}")
-        }
+    private fun isDefaultSmsApp(context: Context): Boolean = try {
+        Telephony.Sms.getDefaultSmsPackage(context) == context.packageName
+    } catch (error: Exception) {
+        Log.w(TAG, "Unable to resolve default SMS package: ${error.message}")
+        false
     }
 
     private companion object {
         const val TAG = "SmsBroadcastReceiver"
+        // Short timeouts: the receiver only has a small background window, and any
+        // failure falls back to the durable retry job.
+        const val RECEIVER_CONNECT_TIMEOUT_MS = 8_000
+        const val RECEIVER_READ_TIMEOUT_MS = 8_000
     }
 }

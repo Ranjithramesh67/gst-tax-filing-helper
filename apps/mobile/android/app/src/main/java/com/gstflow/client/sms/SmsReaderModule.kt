@@ -10,6 +10,7 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.facebook.react.modules.core.PermissionAwareActivity
@@ -93,6 +94,7 @@ object SmsBuffer {
  *  - stopListening(): Promise<boolean>
  *  - getRecentGstSms(limit): Promise<Array<{sender, body, receivedAt, receivedAtIso, hash}>>
  *  - setConsent(enabled): Promise<boolean>  (mirrors consent to native cache)
+ *  - setSmsKeywords(body, header, hide): Promise<boolean>  (mirrors keyword whitelist)
  *  - flushPending(): Promise<number>
  *  - clearNotification(): Promise<boolean>  (removes the transient ingest notification)
  *  - isIgnoringBatteryOptimizations(): Promise<boolean>
@@ -238,6 +240,41 @@ class SmsReaderModule(private val reactContext: ReactApplicationContext) :
     }
 
     /**
+     * Mirrors the server-managed keyword whitelist to native storage so the SMS
+     * receiver can filter messages with no JS running. Body keywords match the
+     * message text; header keywords match the sender id. When `hideAfterForward`
+     * is set the receiver will try to abort the broadcast for matched messages
+     * (effective only when the app is the default SMS app).
+     */
+    @ReactMethod
+    fun setSmsKeywords(
+        bodyKeywords: ReadableArray,
+        headerKeywords: ReadableArray,
+        hideAfterForward: Boolean,
+        promise: Promise,
+    ) {
+        try {
+            SmsKeywords.cache(
+                reactContext,
+                toStringList(bodyKeywords),
+                toStringList(headerKeywords),
+                hideAfterForward,
+            )
+            promise.resolve(true)
+        } catch (error: Exception) {
+            promise.reject("KEYWORDS_FAILED", error.message, error)
+        }
+    }
+
+    private fun toStringList(array: ReadableArray): List<String> {
+        val out = ArrayList<String>(array.size())
+        for (index in 0 until array.size()) {
+            array.getString(index)?.let { out.add(it) }
+        }
+        return out
+    }
+
+    /**
      * Mirrors the signed-in access token (and device id) into SharedPreferences so
      * the native SMS uploader can forward messages with no JS running. Passing a
      * null/blank token clears it (sign-out / consent revocation).
@@ -299,7 +336,7 @@ class SmsReaderModule(private val reactContext: ReactApplicationContext) :
                     val body = if (bodyIndex >= 0) cursor.getString(bodyIndex) else null
                     if (body.isNullOrEmpty()) continue
                     val sender = if (senderIndex >= 0) cursor.getString(senderIndex) ?: "" else ""
-                    if (!GstFilter.isGstRelated(body, sender)) continue
+                    if (!SmsKeywords.matches(reactContext, body, sender)) continue
                     val receivedAt = if (dateIndex >= 0) cursor.getLong(dateIndex) else System.currentTimeMillis()
                     result.pushMap(toMap(IncomingSms(sender, body, receivedAt)))
                 }

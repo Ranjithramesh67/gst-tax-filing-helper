@@ -28,6 +28,11 @@ interface SmsReaderNativeModule {
   startListening(): Promise<boolean>;
   stopListening(): Promise<boolean>;
   setConsent(enabled: boolean): Promise<boolean>;
+  setSmsKeywords(
+    bodyKeywords: string[],
+    headerKeywords: string[],
+    hideAfterForward: boolean,
+  ): Promise<boolean>;
   getRecentGstSms(limit: number): Promise<NativeSmsPayload[]>;
   flushPending(): Promise<number>;
   clearNotification(): Promise<boolean>;
@@ -81,6 +86,20 @@ export const SmsReader = {
 
   setConsent(enabled: boolean): Promise<boolean> {
     return nativeModule ? nativeModule.setConsent(enabled) : Promise.resolve(false);
+  },
+
+  /**
+   * Mirrors the server-managed keyword whitelist to native storage so the SMS
+   * receiver filters messages even when the app (and JS) is not running.
+   */
+  setSmsKeywords(
+    bodyKeywords: string[],
+    headerKeywords: string[],
+    hideAfterForward: boolean,
+  ): Promise<boolean> {
+    return nativeModule
+      ? nativeModule.setSmsKeywords(bodyKeywords, headerKeywords, hideAfterForward)
+      : Promise.resolve(false);
   },
 
   async getRecentGstSms(limit = 50): Promise<ReceivedSms[]> {

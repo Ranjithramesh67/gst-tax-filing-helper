@@ -32,7 +32,12 @@ object SmsUploader {
     private const val AUTH_KEY = "gstflow.mobile.auth"
     private const val DEVICE_ID_KEY = "gstflow.mobile.deviceId"
 
-    fun upload(context: Context, sms: IncomingSms): Boolean {
+    fun upload(
+        context: Context,
+        sms: IncomingSms,
+        connectTimeoutMs: Int = CONNECT_TIMEOUT_MS,
+        readTimeoutMs: Int = READ_TIMEOUT_MS,
+    ): Boolean {
         val base = BuildConfig.API_BASE_URL.trim().trimEnd('/')
         if (base.isEmpty()) return false
 
@@ -55,8 +60,8 @@ object SmsUploader {
 
         val connection = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
-            connectTimeout = CONNECT_TIMEOUT_MS
-            readTimeout = READ_TIMEOUT_MS
+            connectTimeout = connectTimeoutMs
+            readTimeout = readTimeoutMs
             doOutput = true
             setRequestProperty("Content-Type", "application/json")
             setRequestProperty("Accept", "application/json")

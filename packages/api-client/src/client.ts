@@ -46,6 +46,7 @@ import type {
   OtpRequestResponse,
   OtpVerifyBody,
   OtpVerifyResponse,
+  PaginatedAdminSms,
   PaginatedAudit,
   PaginatedBillingInvoices,
   PaginatedClients,
@@ -72,6 +73,7 @@ import type {
   RoleDefinition,
   SmsIngestBody,
   SmsIngestResponse,
+  SmsKeywordConfig,
   SmsMessage,
   SmsProviderBody,
   SmsProviderConfig,
@@ -90,6 +92,7 @@ import type {
   UpdateFirmSettingsBody,
   UpdatePaymentBody,
   UpdateRoleBody,
+  UpdateSmsKeywordBody,
   UpdateSmsProviderBody,
   UpdateSmsRetentionBody,
   UpdateSubscriptionBody,
@@ -113,6 +116,8 @@ export class GstFlowApi {
       this.http.get<FirmBranding>(`/public/firms/${encodeURIComponent(slug)}`, { skipAuth: true }),
     retention: () =>
       this.http.get<SmsRetentionPolicy>('/public/retention', { skipAuth: true }),
+    smsKeywords: () =>
+      this.http.get<SmsKeywordConfig>('/public/sms-keywords', { skipAuth: true }),
   };
 
   auth = {
@@ -317,6 +322,19 @@ export class GstFlowApi {
       test: (body: TestSmsProviderBody) =>
         this.http.post<SmsTestReport>('/admin/sms-providers/test', body),
     },
+    sms: {
+      list: (
+        query?: ListQuery & {
+          firmId?: string;
+          clientId?: string;
+          search?: string;
+          category?: string;
+          status?: string;
+          from?: string;
+          to?: string;
+        },
+      ) => this.http.get<PaginatedAdminSms>('/admin/sms', query),
+    },
     settings: {
       smsRetention: {
         get: () => this.http.get<SmsRetentionPolicy>('/admin/settings/sms-retention'),
@@ -326,6 +344,11 @@ export class GstFlowApi {
           this.http.get<SmsRetentionPreview>('/admin/settings/sms-retention/preview'),
         run: () =>
           this.http.post<SmsRetentionRunResult>('/admin/settings/sms-retention/run', {}),
+      },
+      smsKeywords: {
+        get: () => this.http.get<SmsKeywordConfig>('/admin/settings/sms-keywords'),
+        update: (body: UpdateSmsKeywordBody) =>
+          this.http.put<SmsKeywordConfig>('/admin/settings/sms-keywords', body),
       },
     },
     audit: {
