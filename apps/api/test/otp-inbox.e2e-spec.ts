@@ -249,6 +249,59 @@ describe('Unified inbox feed (e2e)', () => {
     }
   });
 
+  it('groups an OTP across SMS and EMAIL sources into one item and isolates it by tenant', async () => {
+    // A per-run unique code keeps the assertions independent of any OTP event
+    // already in the database (including re-runs within the rolling window).
+    const uniqueCode = () => `${Math.floor(100000 + Math.random() * 900000)}`;
+    const code = uniqueCode();
+    const otherCode = uniqueCode();
+
+    // Delta baseline: the unique code is unknown to this tenant before ingest.
+    const before = await fetchInbox();
+    expect(before.body.items.some((entry: { code?: string }) => entry.code === code)).toBe(false);
+
+    // SMS source path: the body carries the OTP; ingest extracts and files it.
+    const smsId = await ingestSms(code);
+    // EMAIL source path: same code, < window (default 300s) later.
+    await ingestEmail(code, new Date(Date.now() + 1000).toISOString());
+
+    const after = await fetchInbox();
+    const grouped = after.body.items.filter(
+      (entry: { kind: string; code?: string }) => entry.kind === 'OTP' && entry.code === code,
+    );
+    expect(grouped).toHaveLength(1);
+    expect(grouped[0].sources.sort()).toEqual(['EMAIL', 'SMS']);
+    expect(grouped[0].eventCount).toBe(2);
+    expect(grouped[0].client.id).toBe(clientId);
+    // The code is masked in any snippet and the underlying SMS is represented
+    // by the group, never as a raw kind:SMS row.
+    expect(grouped[0].snippet ?? '').not.toContain(code);
+    expect(
+      after.body.items.some(
+        (entry: { kind: string; id: string }) => entry.kind === 'SMS' && entry.id === smsId,
+      ),
+    ).toBe(false);
+
+    // A different code lands in its own OTP item.
+    await ingestSms(otherCode);
+    const withOther = await fetchInbox();
+    const otherGrouped = withOther.body.items.filter(
+      (entry: { kind: string; code?: string }) => entry.kind === 'OTP' && entry.code === otherCode,
+    );
+    expect(otherGrouped).toHaveLength(1);
+    expect(otherGrouped[0].eventCount).toBe(1);
+    expect(otherGrouped[0].sources).toEqual(['SMS']);
+
+    // Cross-firm isolation: another tenant never sees the group.
+    const foreign = await fetchInbox(secondClientToken);
+    expect(
+      foreign.body.items.some(
+        (entry: { id: string; code?: string }) =>
+          entry.id === grouped[0].id || entry.code === code,
+      ),
+    ).toBe(false);
+  });
+
   it('isolates OTP detail by tenant and hides unknown groups', async () => {
     const code = '6688';
     await ingestSms(code);
