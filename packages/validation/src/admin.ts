@@ -152,3 +152,14 @@ export const smsTestSchema = z
     message: 'Provide providerId or an inline config to test',
     path: ['providerId'],
   });
+
+export const smsRetentionSchema = z
+  .object({
+    enabled: z.boolean(),
+    archiveAfterDays: z.coerce.number().int().min(1).max(3650),
+    purgeBackupAfterDays: z.coerce.number().int().min(1).max(3650),
+  })
+  .refine((value) => value.purgeBackupAfterDays >= value.archiveAfterDays, {
+    message: 'purgeBackupAfterDays must be greater than or equal to archiveAfterDays',
+    path: ['purgeBackupAfterDays'],
+  });

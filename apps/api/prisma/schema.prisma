@@ -370,6 +370,39 @@ model ParsedGstData {
   smsMessage SmsMessage @relation(fields: [smsMessageId], references: [id], onDelete: Cascade)
 }
 
+// Encrypted backup of SMS messages that were removed from the live inbox by the
+// retention policy. Not exposed to firms or clients; super-admin only. Rows are
+// hard-deleted once `purgeAt` passes.
+model SmsMessageArchive {
+  id            String      @id @default(cuid())
+  originalId    String
+  clientId      String
+  deviceId      String?
+  sender        String
+  bodyEncrypted String
+  receivedAt    DateTime
+  category      SmsCategory @default(UNCLASSIFIED)
+  status        SmsStatus   @default(RECEIVED)
+  hash          String
+  parsed        Json?
+  archivedAt    DateTime    @default(now())
+  purgeAt       DateTime
+
+  @@index([purgeAt])
+  @@index([clientId, receivedAt])
+  @@index([originalId])
+}
+
+// Generic key/value store for platform-wide settings (e.g. SMS retention).
+model SystemSetting {
+  key         String   @id
+  value       Json
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+
+  @@index([updatedAt])
+}
+
 model Document {
   id           String       @id @default(cuid())
   clientId     String

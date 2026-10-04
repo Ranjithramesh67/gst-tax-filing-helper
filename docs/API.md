@@ -213,6 +213,26 @@ Message tokens: `{{app name}}` / `{{app_name}}` resolve to `appName`, `{{variabl
 the `variables` map. `SmsTestReport` returns per-number `{ to, ok, status?, error?, preview? }`
 without echoing credentials.
 
+## SMS retention (super admin)
+
+Old SMS messages are moved out of the firm portal and client app into an encrypted
+archive table, then permanently deleted after a longer backup window. Parsed GST data
+travels with the message; documents, invoices and filings are not touched. The policy
+is a generic platform setting.
+
+| Method | Path | Auth | Key request fields | Response |
+|---|---|---|---|---|
+| GET | `/admin/settings/sms-retention` | `SUPER_ADMIN` | - | `SmsRetentionPolicy` |
+| PUT | `/admin/settings/sms-retention` | `SUPER_ADMIN` | `enabled`, `archiveAfterDays`, `purgeBackupAfterDays` (`purge` ≥ `archive`) | `SmsRetentionPolicy` |
+| GET | `/admin/settings/sms-retention/preview` | `SUPER_ADMIN` | - | `SmsRetentionPreview` |
+| POST | `/admin/settings/sms-retention/run` | `SUPER_ADMIN` | - | `SmsRetentionRunResult` |
+| GET | `/public/retention` | public | - | `SmsRetentionPolicy` (surfaced on the mobile consent screen) |
+
+Notes: when `enabled`, the scheduler archives and purges on boot and every
+`RETENTION_INTERVAL_MS` (default 6h); `RETENTION_ENABLED=false` disables it
+entirely. `POST .../run` performs the same work immediately regardless of the
+`enabled` flag.
+
 ## Enums
 
 - `Role`: `SUPER_ADMIN`, `FIRM_ADMIN`, `FILER`, `CLIENT`

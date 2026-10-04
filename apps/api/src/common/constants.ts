@@ -1,4 +1,4 @@
-export const CONSENT_VERSION = '2026-09-30';
+export const CONSENT_VERSION = '2026-10-04';
 
 export const SUPPORTED_AUDIO_MIME = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 

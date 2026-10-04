@@ -179,6 +179,27 @@ export interface SmsMessage {
   documents?: Document[];
 }
 
+export interface SmsRetentionPolicy {
+  enabled: boolean;
+  archiveAfterDays: number;
+  purgeBackupAfterDays: number;
+  updatedAt?: string | null;
+}
+
+export interface SmsRetentionPreview {
+  liveCount: number;
+  archiveCandidates: number;
+  archivedCount: number;
+  purgeCandidates: number;
+  policy: SmsRetentionPolicy;
+}
+
+export interface SmsRetentionRunResult {
+  archived: number;
+  purged: number;
+  policy: SmsRetentionPolicy;
+}
+
 export interface ParsedGstData {
   id: string;
   smsMessageId: string;

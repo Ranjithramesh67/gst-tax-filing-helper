@@ -75,6 +75,9 @@ import type {
   SmsMessage,
   SmsProviderBody,
   SmsProviderConfig,
+  SmsRetentionPolicy,
+  SmsRetentionPreview,
+  SmsRetentionRunResult,
   SmsTestReport,
   Subscription,
   TestSmsProviderBody,
@@ -88,6 +91,7 @@ import type {
   UpdatePaymentBody,
   UpdateRoleBody,
   UpdateSmsProviderBody,
+  UpdateSmsRetentionBody,
   UpdateSubscriptionBody,
   UpdateTeamMemberBody,
   UpdateUserBody,
@@ -107,6 +111,8 @@ export class GstFlowApi {
   public = {
     branding: (slug: string) =>
       this.http.get<FirmBranding>(`/public/firms/${encodeURIComponent(slug)}`, { skipAuth: true }),
+    retention: () =>
+      this.http.get<SmsRetentionPolicy>('/public/retention', { skipAuth: true }),
   };
 
   auth = {
@@ -310,6 +316,17 @@ export class GstFlowApi {
         this.http.post<SmsProviderConfig>(`/admin/sms-providers/${id}/activate`, {}),
       test: (body: TestSmsProviderBody) =>
         this.http.post<SmsTestReport>('/admin/sms-providers/test', body),
+    },
+    settings: {
+      smsRetention: {
+        get: () => this.http.get<SmsRetentionPolicy>('/admin/settings/sms-retention'),
+        update: (body: UpdateSmsRetentionBody) =>
+          this.http.put<SmsRetentionPolicy>('/admin/settings/sms-retention', body),
+        preview: () =>
+          this.http.get<SmsRetentionPreview>('/admin/settings/sms-retention/preview'),
+        run: () =>
+          this.http.post<SmsRetentionRunResult>('/admin/settings/sms-retention/run', {}),
+      },
     },
     audit: {
       list: (query?: ListQuery & { firmId?: string; action?: string; entity?: string }) =>

@@ -29,6 +29,7 @@ import type {
   RoleDefinition,
   SmsMessage,
   SmsProviderConfig,
+  SmsRetentionPolicy,
   Subscription,
   User,
 } from './entities';
@@ -310,6 +311,14 @@ export interface TestSmsProviderBody {
 }
 
 export type SmsProviderConfigList = SmsProviderConfig[];
+
+export interface UpdateSmsRetentionBody {
+  enabled: boolean;
+  archiveAfterDays: number;
+  purgeBackupAfterDays: number;
+}
+
+export type PublicRetentionPolicy = SmsRetentionPolicy;
 
 export interface CreateGstReturnBody {
   clientId: string;

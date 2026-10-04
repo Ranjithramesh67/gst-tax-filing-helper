@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, Mail } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -20,12 +20,33 @@ import {
 
 const PAGE_SIZE = 20;
 
+const REFRESH_OPTIONS = [
+  { label: 'Auto-refresh: Off', value: 0 },
+  { label: 'Every 5 seconds', value: 5000 },
+  { label: 'Every 10 seconds', value: 10000 },
+  { label: 'Every 30 seconds', value: 30000 },
+  { label: 'Every 60 seconds', value: 60000 },
+];
+
+const REFRESH_STORAGE_KEY = 'gstflow:sms:autoRefreshMs';
+
 export default function SmsInboxPage() {
   const [page, setPage] = useState(1);
   const [clientId, setClientId] = useState('');
   const [category, setCategory] = useState('');
   const [status, setStatus] = useState('');
+  const [refreshMs, setRefreshMs] = useState<number>(() => {
+    if (typeof window === 'undefined') return 0;
+    const stored = Number(window.localStorage.getItem(REFRESH_STORAGE_KEY));
+    return REFRESH_OPTIONS.some((option) => option.value === stored) ? stored : 0;
+  });
   const to = useFirmPath();
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(REFRESH_STORAGE_KEY, String(refreshMs));
+    }
+  }, [refreshMs]);
 
   const clients = useQuery({
     queryKey: ['clients', 'options'],
@@ -43,6 +64,8 @@ export default function SmsInboxPage() {
         status: status || undefined,
       }),
     placeholderData: (previous) => previous,
+    refetchInterval: refreshMs > 0 ? refreshMs : false,
+    refetchIntervalInBackground: false,
   });
 
   function updateFilter(setter: (value: string) => void) {
@@ -64,7 +87,7 @@ export default function SmsInboxPage() {
       />
 
       <Card className="mb-4 p-4">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <label className="block space-y-1">
             <span className="text-sm font-medium text-slate-700">Client</span>
             <Select value={clientId} onChange={(e) => updateFilter(setClientId)(e.target.value)}>
@@ -94,6 +117,19 @@ export default function SmsInboxPage() {
               {SMS_STATUSES.map((value) => (
                 <option key={value} value={value}>
                   {categoryLabel(value)}
+                </option>
+              ))}
+            </Select>
+          </label>
+          <label className="block space-y-1">
+            <span className="text-sm font-medium text-slate-700">Auto-refresh</span>
+            <Select
+              value={String(refreshMs)}
+              onChange={(e) => setRefreshMs(Number(e.target.value))}
+            >
+              {REFRESH_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </Select>

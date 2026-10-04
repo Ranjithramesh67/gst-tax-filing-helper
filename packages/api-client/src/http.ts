@@ -147,6 +147,9 @@ export class ApiClient {
   patch<T>(path: string, body?: unknown, options?: Partial<RequestOptions>) {
     return this.request<T>({ method: 'PATCH', path, body, ...options });
   }
+  put<T>(path: string, body?: unknown, options?: Partial<RequestOptions>) {
+    return this.request<T>({ method: 'PUT', path, body, ...options });
+  }
   del<T>(path: string, options?: Partial<RequestOptions>) {
     return this.request<T>({ method: 'DELETE', path, ...options });
   }

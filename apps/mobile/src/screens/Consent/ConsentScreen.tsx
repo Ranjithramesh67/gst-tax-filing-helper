@@ -3,22 +3,45 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { CONSENT_VERSION } from '@/config';
+import { api } from '@/lib/api';
 import { getStoredConsent, setStoredConsent } from '@/lib/storage';
 import type { RootStackParamList } from '@/navigation/RootNavigator';
 import { colors, fontSize, radius, spacing } from '@/theme';
 
 type ConsentNavigation = NativeStackNavigationProp<RootStackParamList, 'Consent'>;
 
+interface RetentionInfo {
+  enabled: boolean;
+  archiveAfterDays: number;
+  purgeBackupAfterDays: number;
+}
+
 export function ConsentScreen(): React.ReactElement {
   const navigation = useNavigation<ConsentNavigation>();
   const [alreadyAccepted, setAlreadyAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [retention, setRetention] = useState<RetentionInfo | null>(null);
 
   useEffect(() => {
     let active = true;
     void (async () => {
       const stored = await getStoredConsent();
       if (active && stored?.version === CONSENT_VERSION) setAlreadyAccepted(true);
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const policy = await api.public.retention();
+        if (active) setRetention(policy);
+      } catch {
+        // Consent does not depend on the policy; fall back to generic wording.
+      }
     })();
     return () => {
       active = false;
@@ -69,6 +92,13 @@ export function ConsentScreen(): React.ReactElement {
         <Text style={styles.body}>
           We do not read personal chats or bank balance messages. We do not send SMS on your behalf.
           We do not share your messages with anyone other than your registered firm.
+        </Text>
+
+        <Text style={styles.heading}>How long we keep messages</Text>
+        <Text style={styles.body}>
+          {retention
+            ? `GST messages are available to your firm for ${retention.archiveAfterDays} days, after which they are removed from the firm portal and this app. A protected copy is kept for up to ${retention.purgeBackupAfterDays} days before permanent deletion, and only a platform administrator can access it.`
+            : 'GST messages are available to your firm for a limited period, after which they are removed from the firm portal and this app. A protected copy is kept for a further period before permanent deletion, and only a platform administrator can access it.'}
         </Text>
 
         <Text style={styles.heading}>How to revoke</Text>
