@@ -27,7 +27,7 @@ Execution mode: subagent-driven-development
 | 3 | Extract OTPs from SMS on ingest + backfill | done (review clean after fix) | `1f7e909`, `9a924e6`, `bef1212` |
 | 4 | `POST /otp/ingest` + validation | done (review clean after fix) | `4b94840`, `666289f`, `22f7293`, `d8fb642`, `d602e1d` |
 | 5 | `GET /inbox` unified feed | done (review clean after correction) | `36e6cae`, `32fd672`, `627fe7d`, `61b1fc2` |
-| 6 | Admin OTP settings | pending | - |
+| 6 | Admin OTP settings | done | `cf55c3d`, `e83b589`, `c0dcb59`, `70800b4`, `38e0244` |
 | 7 | Firm web `/sms` OTP card | pending | - |
 | 8 | Server e2e for grouping + inbox | pending | - |
 | 9 | Kotlin OTP extractor (parity) | pending | - |

@@ -351,10 +351,10 @@ export interface PaginatedInbox { items: InboxItem[]; total: number; page: numbe
 **Interfaces:**
 - `GET/PUT /v1/admin/settings/otp` (`SUPER_ADMIN`) with `{ groupWindowSeconds: number (30..3600), emailEnabled: boolean, providersEnabled: { imap: boolean, gmail: boolean, graph: boolean } }`; `SystemSetting` key `otp.settings`.
 
-- [ ] **Step 1: Service** default `{ groupWindowSeconds: 300, emailEnabled: true, providersEnabled: { imap: true, gmail: true, graph: true } }`, `getConfig`/`updateConfig` mirroring `SmsKeywordService`.
-- [ ] **Step 2: Validation + types + api-client namespace** `admin.settings.otp.*`.
-- [ ] **Step 3: Unit test** defaults + clamping.
-- [ ] **Step 4: Commit checkpoint**.
+- [x] **Step 1: Service** default `{ groupWindowSeconds: 300, emailEnabled: true, providersEnabled: { imap: true, gmail: true, graph: true } }`, `getConfig`/`updateConfig` mirroring `SmsKeywordService`.
+- [x] **Step 2: Validation + types + api-client namespace** `admin.settings.otp.*`.
+- [x] **Step 3: Unit test** defaults + clamping.
+- [x] **Step 4: Commit checkpoint**.
 
 ### Task 7: Firm web `/sms` OTP card
 
