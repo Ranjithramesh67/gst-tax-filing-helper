@@ -44,6 +44,8 @@ import type {
   ListSmsQuery,
   LoginBody,
   MarkPaymentRequestPaidBody,
+  OtpIngestBody,
+  OtpIngestResponse,
   OtpRequestBody,
   OtpRequestResponse,
   OtpSettingsConfig,
@@ -178,6 +180,11 @@ export class GstFlowApi {
   inbox = {
     list: (query?: ListInboxQuery) => this.http.get<PaginatedInbox>('/inbox', query),
     get: (id: string) => this.http.get<InboxGroupDetail>(`/inbox/${id}`),
+  };
+
+  otp = {
+    /** Uploads OTPs extracted on-device from email (CLIENT role). */
+    ingest: (body: OtpIngestBody) => this.http.post<OtpIngestResponse>('/otp/ingest', body),
   };
 
   notifications = {
