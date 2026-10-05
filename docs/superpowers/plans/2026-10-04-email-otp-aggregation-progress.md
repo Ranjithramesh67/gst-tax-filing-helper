@@ -39,7 +39,7 @@ Execution mode: subagent-driven-development
 | 15 | Gmail connector | done (review clean after fixes) | `c5a5da5`, `4d044ca` |
 | 16 | Microsoft Graph connector | done (review clean after fixes) | `326fd8a` |
 | 17 | Types + api-client additions | done (types already present from T4/T5; added `otp.ingest`) | `6100efe` |
-| 18 | `SmsLogScreen` server feed + overlay | pending | - |
+| 18 | `SmsLogScreen` server feed + overlay | done | `7f624ac` |
 | 19 | Build, test, deploy, republish | pending | - |
 
 ## Blocker / notes
@@ -89,6 +89,17 @@ Execution mode: subagent-driven-development
     `$select=...,bodyPreview,...` only (never full bodies); cursor is the newest
     `receivedDateTime` (inclusive watermark); `@odata.nextLink` host is pinned to
     the API host; page caps never advance the cursor.
+- **Task 18 UI (done):** `SmsLogScreen` now renders the server `/inbox` feed via
+  `@tanstack/react-query` (`api.inbox.list({page,pageSize})`, `placeholderData`
+  keeps the previous page during refetch) with a locally-queued SMS overlay pinned
+  to the top and deduped against server rows by canonical `hashMessage` (drops an
+  overlay row when the server already has the same `sender|body|receivedAt`
+  second). New `apps/mobile/src/components/OtpCard.tsx` renders OTP groups
+  (code + SMS/Email badges + `xN`); raw SMS rows show body + a
+  Queued/Synced pill. `subscribeSync` invalidates the inbox query and reloads the
+  queue from either manual or background sync; `smsQueue.subscribe` keeps the
+  overlay live; pager + pull-to-refresh included. `QueryClientProvider` added in
+  `apps/mobile/App.tsx` (`retry:1`, `staleTime:30s`). Mobile typecheck clean.
 - **Carry-forward into Task 19 (product check):** `EmailSettingsScreen` exposes
   only the IMAP "add account" form; there are no Gmail/Graph "link" buttons, so
   the native link flows (JS `EmailAccounts.linkGmail/linkGraph` exist and are
