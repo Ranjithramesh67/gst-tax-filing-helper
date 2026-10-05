@@ -92,7 +92,7 @@ export const EmailAccounts = {
     return nativeModule ? nativeModule.linkGmail() : Promise.resolve(FAILED);
   },
 
-  /** Task 16: Microsoft Graph OAuth link. Rejects as not implemented for now. */
+  /** Links a Microsoft 365 / Outlook mailbox via MSAL (Mail.Read). */
   linkGraph(): Promise<EmailMutationResult> {
     return nativeModule ? nativeModule.linkGraph() : Promise.resolve(FAILED);
   },

@@ -18,4 +18,16 @@ buildscript {
     }
 }
 
+// MSAL's transitive `com.microsoft.device.display:display-mask` is published
+// only to Microsoft's public Duo SDK feed (not Maven Central/Google), so the
+// repository must be available wherever the app resolves dependencies.
+allprojects {
+    repositories {
+        maven {
+            name = "DuoSDKFeed"
+            url = uri("https://pkgs.dev.azure.com/MicrosoftDeviceSDK/DuoSDK-Public/_packaging/Duo-SDK-Feed/maven/v1")
+        }
+    }
+}
+
 apply plugin: "com.facebook.react.rootproject"

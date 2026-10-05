@@ -77,10 +77,10 @@ object EmailPoller {
     }
 
     /**
-     * Selects the connector for an account. IMAP and Gmail are implemented;
-     * GRAPH arrives in Task 16 and is skipped (with a clear log) rather than
-     * failing the whole poll. The Gmail connector is wired with a token refresher
-     * that re-mints the short-lived access token via [GmailTokens].
+     * Selects the connector for an account. IMAP, Gmail and Microsoft Graph are
+     * all implemented. The Gmail/Graph connectors are wired with a token
+     * refresher that re-mints the short-lived access token ([GmailTokens] /
+     * [GraphTokens]) when the stored one has expired.
      */
     internal fun connectorFor(context: Context, account: EmailAccount): EmailConnector? =
         when (account.provider) {
@@ -89,10 +89,10 @@ object EmailPoller {
                 account = account,
                 tokenRefresher = { GmailTokens.refresh(context, account) },
             )
-            EmailProvider.GRAPH -> {
-                Log.i(TAG, "Provider ${account.provider} not implemented yet; skipping ${account.id}")
-                null
-            }
+            EmailProvider.GRAPH -> GraphConnector(
+                account = account,
+                tokenRefresher = { GraphTokens.refresh(context, account) },
+            )
         }
 
     /**

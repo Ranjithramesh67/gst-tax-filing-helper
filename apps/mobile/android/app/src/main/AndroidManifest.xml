@@ -40,6 +40,32 @@
             android:noHistory="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- Transparent MSAL host for linking a Microsoft 365 / Outlook mailbox. -->
+        <activity
+            android:name=".email.GraphLinkActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!--
+          MSAL's browser host. The scheme must match the `redirect_uri` in
+          res/raw/msal_config.json (`msal<client_id>://auth`); MSAL refuses to
+          start sign-in with app_manifest_validation_error if this is absent.
+        -->
+        <activity
+            android:name="com.microsoft.identity.client.BrowserTabActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="auth"
+                    android:scheme="msal00000000-0000-0000-0000-000000000000" />
+            </intent-filter>
+        </activity>
+
         <!-- Only the system telephony stack may deliver SMS_RECEIVED. -->
         <receiver
             android:name=".sms.SmsBroadcastReceiver"

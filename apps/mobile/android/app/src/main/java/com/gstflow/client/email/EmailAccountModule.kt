@@ -44,7 +44,7 @@ internal object EmailAccountValidation {
  *  - setEnabled(id, enabled): Promise<{ok:true}>
  *  - setConsent(enabled): Promise<boolean>   (gates the native poller)
  *  - linkGmail(): Promise<{ok:true}>          (launches [GmailLinkActivity])
- *  - linkGraph(): Task 16, rejected as NOT_IMPLEMENTED here
+ *  - linkGraph(): Promise<{ok:true}>          (launches [GraphLinkActivity])
  *
  * The IMAP password is written straight into [EmailAccounts]'
  * EncryptedSharedPreferences via [EmailAccount.secretRef]; it is never logged
@@ -56,6 +56,9 @@ class EmailAccountModule(private val reactContext: ReactApplicationContext) :
 
     /** Set while a Gmail/OAuth link activity is in flight. */
     private var pendingGmailPromise: Promise? = null
+
+    /** Set while a Microsoft Graph link activity is in flight. */
+    private var pendingGraphPromise: Promise? = null
 
     init {
         reactContext.addActivityEventListener(this)
@@ -172,7 +175,27 @@ class EmailAccountModule(private val reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun linkGraph(promise: Promise) {
-        promise.reject("NOT_IMPLEMENTED", "Microsoft Graph linking ships in Task 16")
+        reactContext.runOnUiQueueThread {
+            val activity = currentActivity
+            if (activity == null) {
+                promise.reject("NO_ACTIVITY", "No foreground activity to start Microsoft linking")
+                return@runOnUiQueueThread
+            }
+            if (pendingGraphPromise != null) {
+                promise.reject("IN_PROGRESS", "A Microsoft link is already in progress")
+                return@runOnUiQueueThread
+            }
+            pendingGraphPromise = promise
+            try {
+                activity.startActivityForResult(
+                    Intent(activity, GraphLinkActivity::class.java),
+                    REQUEST_GRAPH_LINK,
+                )
+            } catch (error: Exception) {
+                pendingGraphPromise = null
+                promise.reject("LINK_FAILED", error.message, error)
+            }
+        }
     }
 
     override fun onActivityResult(
@@ -181,16 +204,38 @@ class EmailAccountModule(private val reactContext: ReactApplicationContext) :
         resultCode: Int,
         data: Intent?,
     ) {
-        if (requestCode != REQUEST_GMAIL_LINK) return
-        val promise = pendingGmailPromise ?: return
-        pendingGmailPromise = null
+        when (requestCode) {
+            REQUEST_GMAIL_LINK -> {
+                val promise = pendingGmailPromise ?: return
+                pendingGmailPromise = null
+                finishLink(promise, "Gmail", resultCode, data)
+            }
+            REQUEST_GRAPH_LINK -> {
+                val promise = pendingGraphPromise ?: return
+                pendingGraphPromise = null
+                finishLink(promise, "Microsoft", resultCode, data)
+            }
+            else -> Unit
+        }
+    }
+
+    /**
+     * Resolves or rejects the RN promise owned by a link activity. The token
+     * lives only in the encrypted store; the bridge sees just `ok` on success.
+     * The caller has already cleared the provider's in-flight promise.
+     */
+    private fun finishLink(
+        promise: Promise,
+        provider: String,
+        resultCode: Int,
+        data: Intent?,
+    ) {
         if (resultCode == Activity.RESULT_OK) {
-            // The token lives only in the encrypted store; the bridge sees just ok.
             kickPoll()
             promise.resolve(okResult())
         } else {
             val reason = data?.getStringExtra(GmailLinkActivity.EXTRA_ERROR)
-                ?: "Gmail linking was cancelled"
+                ?: "$provider linking was cancelled"
             promise.reject("LINK_CANCELLED", reason)
         }
     }
@@ -206,5 +251,6 @@ class EmailAccountModule(private val reactContext: ReactApplicationContext) :
     companion object {
         const val NAME = "EmailAccounts"
         private const val REQUEST_GMAIL_LINK = 48151
+        private const val REQUEST_GRAPH_LINK = 48153
     }
 }

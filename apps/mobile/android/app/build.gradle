@@ -143,6 +143,9 @@ dependencies {
     // Google Sign-In + GoogleAuthUtil for the Gmail OAuth link flow (Task 15).
     implementation("com.google.android.gms:play-services-auth:21.2.0")
 
+    // MSAL for the Microsoft Graph OAuth link + silent token refresh (Task 16).
+    implementation("com.microsoft.identity.client:msal:5.2.0")
+
     // JVM unit tests for pure-Kotlin logic (e.g. OtpExtractor). The real org.json
     // artifact shadows the stubbed android.jar so fixtures can be parsed locally.
     testImplementation("junit:junit:4.13.2")

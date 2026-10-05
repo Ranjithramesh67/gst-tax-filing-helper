@@ -77,10 +77,10 @@ class EmailPollerTest {
     private val context: Context = mock(Context::class.java)
 
     @Test
-    fun connectorForSupportsImapAndGmail() {
+    fun connectorForSupportsImapGmailAndGraph() {
         assertTrue(EmailPoller.connectorFor(context, account()) is ImapConnector)
         assertTrue(EmailPoller.connectorFor(context, account(provider = EmailProvider.GMAIL)) is GmailConnector)
-        assertNull(EmailPoller.connectorFor(context, account(provider = EmailProvider.GRAPH)))
+        assertTrue(EmailPoller.connectorFor(context, account(provider = EmailProvider.GRAPH)) is GraphConnector)
     }
 
     @Test
