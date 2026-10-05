@@ -40,11 +40,37 @@ Execution mode: subagent-driven-development
 | 16 | Microsoft Graph connector | done (review clean after fixes) | `326fd8a` |
 | 17 | Types + api-client additions | done (types already present from T4/T5; added `otp.ingest`) | `6100efe` |
 | 18 | `SmsLogScreen` server feed + overlay | done | `7f624ac` |
-| 19 | Build, test, deploy, republish | pending | - |
+| 19 | Build, test, deploy, republish | done | (build.gradle fix + tracker) |
 
 ## Blocker / notes
 
 - (none blocking)
+- **Task 19 deploy (done):** API typecheck clean; unit **104/104**, e2e **95/95**
+  pass. Built `@gstflow/{types,validation,otp,api-client}` + `@gstflow/api` and
+  rsynced to remote. **Remote did not have `@gstflow/otp`**: created
+  `packages/otp/{dist,package.json}` on the remote and the
+  `node_modules/@gstflow/otp -> ../../packages/otp` symlink (the other three
+  `@gstflow/*` packages already had symlinks, but `otp` is new). Applied the
+  pending `20261004213556_otp_events` migration (`prisma migrate deploy`) and
+  regenerated the Prisma client (`prisma generate`) on the remote before
+  `pm2 restart gstflow-api --update-env`. Confirmed all new routes mapped
+  (`POST /v1/otp/ingest`, `GET /v1/inbox`, `GET /v1/inbox/:id`,
+  `GET|PUT /v1/admin/settings/otp`), health 200, and a live
+  `login -> GET /api/inbox` returned 200 with 138 items.
+- **Task 19 APK packaging fix:** the release build failed at
+  `:app:mergeReleaseJavaResource` — `com.sun.mail:android-mail` and
+  `android-activation` both ship `META-INF/NOTICE.md` (and friends). Added a
+  `packaging { resources { pickFirsts += [ META-INF/NOTICE.md, LICENSE.md,
+  DEPENDENCIES, LICENSE, NOTICE, INDEX.LIST ] } }` block in
+  `apps/mobile/android/app/build.gradle`. This is the first `assembleRelease`
+  since the IMAP deps landed (Tasks 11-18 only ran tests), so the collision only
+  surfaced now. Rebuild green; universal **67,302,742 B** and arm64
+  **25,733,304 B** copied to `apps/web/public/` and rsynced; public
+  `Content-Length` matches exactly. `apps/web/public/*.apk` is gitignored.
+- **Carry-forward resolved (Task 19 scope):** no Gmail/Graph link buttons were
+  added to `EmailSettingsScreen` and no periodic email-poll Alarm/Job was added;
+  IMAP-only entry and SMS-tick-driven email poll are accepted as the current
+  product behavior for this feature (both remain documented follow-ups above).
 - **Task 5 layout deviation (intentional):** the plan listed new
   `apps/api/src/inbox/*` files, but the task brief directed `listFeed` into
   `OtpService` and the endpoint into the OTP area. Implemented as

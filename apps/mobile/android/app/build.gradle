@@ -112,6 +112,22 @@ android {
         jvmTarget = "17"
     }
 
+    // com.sun.mail:android-mail and android-activation ship overlapping Apache
+    // license/notice metadata; pick one copy instead of failing the release
+    // resource merge.
+    packaging {
+        resources {
+            pickFirsts += [
+                "META-INF/NOTICE.md",
+                "META-INF/LICENSE.md",
+                "META-INF/DEPENDENCIES",
+                "META-INF/LICENSE",
+                "META-INF/NOTICE",
+                "META-INF/INDEX.LIST",
+            ]
+        }
+    }
+
     // JVM unit tests exercise pollers/uploaders that log through android.util.Log.
     // The stubbed android.jar throws on those calls by default; return harmless
     // defaults instead so the pure logic paths can be tested without Robolectric.
