@@ -37,7 +37,7 @@ Execution mode: subagent-driven-development
 | 13 | RN bridge + JS wrapper + consent | done (review clean after hardening) | `5a8260c`, `54d1b5d`, `67f4412` |
 | 14 | Mobile email settings screen | done (review clean after fix) | `267592a`, `6cbd48d`, `0408143` |
 | 15 | Gmail connector | done (review clean after fixes) | `c5a5da5`, `4d044ca` |
-| 16 | Microsoft Graph connector | pending | - |
+| 16 | Microsoft Graph connector | done (review clean after fixes) | `326fd8a` |
 | 17 | Types + api-client additions | pending | - |
 | 18 | `SmsLogScreen` server feed + overlay | pending | - |
 | 19 | Build, test, deploy, republish | pending | - |
@@ -66,10 +66,42 @@ Execution mode: subagent-driven-development
 - **Task 13 consent (done):** `EmailPoller.pollAll` and `EmailRetryJobService` now
   gate on native consent (default OFF), and the pure overload requires
   `consentGranted` explicitly (fail-closed). Linking UI must not bypass this.
+- **Task 16 MSAL setup (important for builds + linking):**
+  - `com.microsoft.identity.client:msal:5.2.0` pulls
+    `com.microsoft.device.display:display-mask:0.3.0`, which is published only to
+    Microsoft's public Duo SDK feed (not Maven Central/Google). Added that Maven
+    repo in `apps/mobile/android/build.gradle` (`allprojects { repositories { maven { ... DuoSDKFeed } } }`).
+    Dropping it breaks `:app:processReleaseResources` / any resolve of MSAL.
+  - MSAL runs in `account_mode: MULTIPLE` so several Microsoft mailboxes can be
+    linked; refresh resolves the exact account by the stored `homeAccountId`
+    (`GraphTokenJson.KEY_HOME_ACCOUNT_ID`) and refuses to persist if the returned
+    `IAccount.id` does not match (no cross-mailbox token).
+  - `AndroidManifest.xml` must declare `com.microsoft.identity.client.BrowserTabActivity`
+    with a `VIEW`/`DEFAULT`/`BROWSABLE` intent-filter whose `<data>` scheme/host
+    match `redirect_uri` in `res/raw/msal_config.json` (`msal<client_id>://auth`).
+    Without it MSAL throws `app_manifest_validation_error` and both linking and
+    refresh are dead.
+  - `res/raw/msal_config.json` ships a **placeholder** client_id
+    (`00000000-...`); an Azure app registration with delegated `Mail.Read` (and
+    that redirect URI) must replace it before Microsoft linking works. Same class
+    of external prerequisite as the Google Cloud OAuth client for Gmail.
+  - `GraphConnector` uses `$search="otp"`, `$top`, and
+    `$select=...,bodyPreview,...` only (never full bodies); cursor is the newest
+    `receivedDateTime` (inclusive watermark); `@odata.nextLink` host is pinned to
+    the API host; page caps never advance the cursor.
+- **Carry-forward into Task 19 (product check):** `EmailSettingsScreen` exposes
+  only the IMAP "add account" form; there are no Gmail/Graph "link" buttons, so
+  the native link flows (JS `EmailAccounts.linkGmail/linkGraph` exist and are
+  typed) are not reachable from the UI. Decide whether Task 18/19 adds link
+  buttons or accepts IMAP-only entry for now.
 - **Carry-forward into Task 19 (product check):** email poll cadence currently
   fires only off the SMS foreground-service tick (15-min throttle); with no inbound
   SMS there is no email poll. Verify whether a periodic `JobScheduler`/Alarm tick is
   needed.
+- **Known limitation (matches Gmail):** a first poll whose OTP-scoped result set
+  exceeds `MAX_MESSAGES` with a null cursor cannot drain the older tail (cursor
+  stays null, newest page is re-read). Only affects a >500-message initial
+  backlog; accepted for now.
 - **Commit trailer:** the repo's `prepare-commit-msg` hook auto-appends the
   `Co-authored-by: monkeycode-ai <monkeycode-ai@chaitin.com>` trailer. Do NOT add
   it manually in commit messages (it produces duplicates).
