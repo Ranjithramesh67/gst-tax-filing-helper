@@ -63,6 +63,11 @@ class EmailAccountModule(private val reactContext: ReactApplicationContext) :
 
     override fun getName(): String = NAME
 
+    override fun invalidate() {
+        reactContext.removeActivityEventListener(this)
+        super.invalidate()
+    }
+
     @ReactMethod
     fun addImapAccount(address: String, password: String, host: String, port: Int, promise: Promise) {
         EmailAccountValidation.validateImap(address, password, host, port)?.let { reason ->

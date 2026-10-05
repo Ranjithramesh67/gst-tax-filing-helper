@@ -9,7 +9,6 @@ import android.os.Bundle
 import android.util.Log
 import com.google.android.gms.auth.GoogleAuthUtil
 import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.Scope
@@ -32,8 +31,6 @@ import java.util.UUID
  */
 class GmailLinkActivity : Activity() {
 
-    private var signInClient: GoogleSignInClient? = null
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // A configuration change must not launch a second sign-in prompt.
@@ -43,7 +40,6 @@ class GmailLinkActivity : Activity() {
             .requestScopes(Scope(GmailConnector.GMAIL_SCOPE))
             .build()
         val client = GoogleSignIn.getClient(this, options)
-        signInClient = client
         startActivityForResult(client.signInIntent, RC_SIGN_IN)
     }
 
@@ -110,11 +106,6 @@ class GmailLinkActivity : Activity() {
     private fun finishWithError(message: String) {
         setResult(RESULT_CANCELED, Intent().putExtra(EXTRA_ERROR, message))
         finish()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        signInClient = null
     }
 
     companion object {

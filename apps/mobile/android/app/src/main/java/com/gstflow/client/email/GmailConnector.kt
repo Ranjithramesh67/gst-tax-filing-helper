@@ -16,8 +16,9 @@ import org.json.JSONObject
 /**
  * Gmail implementation of [EmailConnector] backed by the Gmail REST API.
  *
- * ### Listing
- * The first poll (no cursor) uses the OTP-scoped search the brief pins:
+ * ### Listing (OTP-scoped, always)
+ * Candidate discovery never enumerates the mailbox. Every poll reads only the
+ * messages returned by the OTP-scoped search the brief pins:
  *
  * ```
  * GET /gmail/v1/users/me/messages
@@ -25,20 +26,22 @@ import org.json.JSONObject
  *     &maxResults=50
  * ```
  *
+ * The query is paged with `pageToken` (bounded, see [MAX_PAGES]/[MAX_MESSAGES]).
  * Each candidate id is then expanded with
  * `GET /messages/{id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`
  * and mapped to [RawMail]: `from`/`subject` from the headers, `snippetBody` from
  * the response `snippet` (bounded to [MAX_SNIPPET_CHARS]), `receivedAt` from
- * `internalDate`. The full body is never fetched.
+ * `internalDate`. Full bodies are never fetched, and metadata is only ever
+ * fetched for ids that came out of the OTP-scoped query.
  *
  * ### Cursor
  * The persisted cursor is the mailbox `historyId` (from `users.getProfile`).
- * When a cursor is present the connector takes the incremental
- * `users.history.list?startHistoryId=<cursor>&historyTypes=messageAdded` path and
- * only fetches metadata for the ids it reports; when history has expired
- * (HTTP 404) or no cursor exists yet, it falls back to the query above.
- * [newCursor] returns the `historyId` captured at the start of the poll so the
- * next poll starts exactly after the messages already scanned. Connectors are
+ * `historyId` is used purely as a change detector: when the mailbox `historyId`
+ * equals the stored cursor the mailbox is unchanged, so the poll returns empty
+ * without reading a single message. Otherwise the OTP-scoped query above runs.
+ * If paging hits [MAX_PAGES]/[MAX_MESSAGES] with more mail still queued
+ * (`nextPageToken` present) the cursor is **not** advanced, so the remainder is
+ * re-read on the next poll rather than being permanently skipped. Connectors are
  * created per poll, so this short-lived internal state is safe.
  *
  * ### Credentials
@@ -55,9 +58,15 @@ class GmailConnector(
     private val baseUrl: HttpUrl = DEFAULT_BASE_URL.toHttpUrl(),
     private val tokenProvider: () -> String? = { GmailTokenJson.accessToken(account.oauthTokenJson) },
     private val tokenRefresher: (() -> String?)? = null,
+    /** Messages requested per `messages.list` page. */
+    private val pageSize: Int = PAGE_SIZE,
+    /** Hard bound on pages followed per poll. */
+    private val maxPages: Int = MAX_PAGES,
+    /** Hard bound on candidate ids returned per poll. */
+    private val maxMessages: Int = MAX_MESSAGES,
 ) : EmailConnector {
 
-    /** Mailbox `historyId` captured at the last [listOtpCandidates] call. */
+    /** Cursor to persist for the poll in progress; see [newCursor]. */
     private var latestHistoryId: String? = null
 
     /** Token resolved during this poll (initial or refreshed); never logged. */
@@ -66,55 +75,57 @@ class GmailConnector(
     override fun id(): String = account.id
 
     override fun listOtpCandidates(since: String?): List<RawMail> {
-        val historyId = getProfileHistoryId()
-        latestHistoryId = historyId
+        val mailboxHistoryId = getProfileHistoryId()
 
-        val ids = loadCandidateIds(since).distinct().take(MAX_MESSAGES)
-        return ids.mapNotNull { id -> fetchRawMail(id) }
+        // `historyId` is a change detector only. An unchanged mailbox means there
+        // is nothing new to look at, so no message (and no metadata) is read.
+        val stored = since?.trim().orEmpty()
+        if (stored.isNotEmpty() && stored == mailboxHistoryId) {
+            latestHistoryId = stored
+            return emptyList()
+        }
+
+        val page = queryOtpScopedIds()
+        // If a cap was hit, unread mail remains: keep the previous cursor so the
+        // remainder is re-read next poll instead of being permanently skipped.
+        latestHistoryId = if (page.capped) since else mailboxHistoryId
+
+        return page.ids.mapNotNull { id -> fetchRawMail(id) }
     }
 
     override fun newCursor(mails: List<RawMail>): String? = latestHistoryId
 
-    private fun loadCandidateIds(since: String?): List<String> {
-        val startHistoryId = since?.trim()?.toLongOrNull()
-        if (startHistoryId == null) return queryMessageIds()
-
-        // Incremental path: only messages added since the last poll. Gmail drops
-        // history older than about a week, in which case it returns HTTP 404 and
-        // we fall back to the OTP query so no mail is silently skipped.
-        val fromHistory = historyMessageIds(startHistoryId)
-        return fromHistory ?: queryMessageIds()
-    }
-
-    private fun queryMessageIds(): List<String> {
-        val json = getJson(MESSAGES_PATH, listOf("q" to QUERY, "maxResults" to MAX_MESSAGES.toString()))
-            ?: return emptyList()
-        return messageIds(json)
-    }
-
-    private fun historyMessageIds(startHistoryId: Long): List<String>? {
-        val json = getJson(
-            HISTORY_PATH,
-            listOf(
-                "startHistoryId" to startHistoryId.toString(),
-                "historyTypes" to "messageAdded",
-                "maxResults" to MAX_HISTORY_RESULTS.toString(),
-            ),
-            allowNotFound = true,
-        ) ?: return null
-
+    /**
+     * Runs the OTP-scoped `messages.list` query, following `nextPageToken` up to
+     * [maxPages]/[maxMessages]. Returns the ids and whether a cap was reached
+     * with more results still pending.
+     */
+    private fun queryOtpScopedIds(): OtpIdPage {
         val ids = ArrayList<String>()
-        val history = json.optJSONArray("history") ?: return ids
-        for (index in 0 until history.length()) {
-            val messages = history.optJSONObject(index)?.optJSONArray("messages") ?: continue
-            for (messageIndex in 0 until messages.length()) {
-                messages.optJSONObject(messageIndex)
-                    ?.optString("id")
-                    ?.takeIf { it.isNotEmpty() }
-                    ?.let { ids.add(it) }
+        var pageToken: String? = null
+        var pages = 0
+        var capped = false
+
+        while (true) {
+            val query = ArrayList<Pair<String, String>>(4)
+            query.add("q" to QUERY)
+            query.add("maxResults" to pageSize.toString())
+            if (!pageToken.isNullOrEmpty()) query.add("pageToken" to pageToken)
+
+            val json = getJson(MESSAGES_PATH, query) ?: break
+            ids.addAll(messageIds(json))
+
+            val next = json.optString("nextPageToken", "").takeIf { it.isNotEmpty() }
+            pages++
+            if (next == null) break
+            if (pages >= maxPages || ids.size >= maxMessages) {
+                capped = true
+                break
             }
+            pageToken = next
         }
-        return ids
+
+        return OtpIdPage(ids.distinct().take(maxMessages), capped)
     }
 
     private fun messageIds(json: JSONObject): List<String> {
@@ -228,24 +239,31 @@ class GmailConnector(
         return if (collapsed.length > MAX_SNIPPET_CHARS) collapsed.take(MAX_SNIPPET_CHARS) else collapsed
     }
 
+    private data class OtpIdPage(val ids: List<String>, val capped: Boolean)
+
     companion object {
         const val DEFAULT_BASE_URL = "https://gmail.googleapis.com/"
 
         /** OAuth scope requested at link time and used when refreshing the token. */
         const val GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
 
-        /** OTP-scoped search used on the first poll / when history has expired. */
+        /** OTP-scoped search used on every poll; the only mailbox read allowed. */
         const val QUERY = "(otp OR \"verification code\" OR \"one time password\") newer_than:2d"
 
-        const val MAX_MESSAGES = 50
+        /** Messages requested per page. */
+        const val PAGE_SIZE = 50
+
+        /** Hard cap on pages followed per poll (PAGE_SIZE * MAX_PAGES messages). */
+        const val MAX_PAGES = 10
+
+        /** Hard cap on candidate ids processed per poll. */
+        const val MAX_MESSAGES = 500
 
         /** Bounded plain-text excerpt cap; the OTP extractor only reads the window. */
         const val MAX_SNIPPET_CHARS = 500
 
         private const val PROFILE_PATH = "gmail/v1/users/me/profile"
         private const val MESSAGES_PATH = "gmail/v1/users/me/messages"
-        private const val HISTORY_PATH = "gmail/v1/users/me/history"
-        private const val MAX_HISTORY_RESULTS = 500
 
         private const val HTTP_UNAUTHORIZED = 401
         private const val HTTP_NOT_FOUND = 404

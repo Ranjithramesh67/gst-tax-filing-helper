@@ -7,7 +7,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -144,36 +143,80 @@ class GmailConnectorTest {
     }
 
     @Test
-    fun usesHistoryIncrementalWhenCursorPresent() {
+    fun incrementalPollStillUsesOtpScopedQuery() {
         server.enqueue(profile("2000"))
-        server.enqueue(history("m2"))
+        server.enqueue(messageList("m2"))
         server.enqueue(metadata("m2", "a@b.com", "s", "b", "1700000000000"))
 
-        val mails = connector().listOtpCandidates("1000")
+        val connector = connector()
+        val mails = connector.listOtpCandidates("1000")
 
         server.takeRequest() // profile
-        val historyRequest = server.takeRequest()
-        assertEquals("/gmail/v1/users/me/history", historyRequest.requestUrl!!.encodedPath)
-        assertEquals("1000", historyRequest.requestUrl!!.queryParameter("startHistoryId"))
-        assertEquals("messageAdded", historyRequest.requestUrl!!.queryParameter("historyTypes"))
+        val listRequest = server.takeRequest()
+        assertEquals("/gmail/v1/users/me/messages", listRequest.requestUrl!!.encodedPath)
+        assertEquals(GmailConnector.QUERY, listRequest.requestUrl!!.queryParameter("q"))
+        assertNull(listRequest.requestUrl!!.queryParameter("startHistoryId"))
         assertEquals(listOf("m2"), mails.map { it.messageId })
+        assertEquals("2000", connector.newCursor(mails))
     }
 
     @Test
-    fun fallsBackToOtpQueryWhenHistoryExpired() {
-        server.enqueue(profile("2000"))
-        server.enqueue(MockResponse().setResponseCode(404))
-        server.enqueue(messageList("m3"))
-        server.enqueue(metadata("m3", "a@b.com", "s", "b", "1700000000000"))
+    fun unchangedHistoryIdReturnsEmptyWithoutReads() {
+        server.enqueue(profile("1000"))
 
-        val mails = connector().listOtpCandidates("1")
+        val connector = connector()
+        val mails = connector.listOtpCandidates("1000")
+
+        assertTrue(mails.isEmpty())
+        assertEquals("1000", connector.newCursor(mails))
+        // Only the cheap change-detector profile read happened; no mailbox/message read.
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test
+    fun followsNextPageTokenAndProcessesAllPages() {
+        server.enqueue(profile("1000"))
+        server.enqueue(messageList("m1", pageToken = "PAGE2"))
+        server.enqueue(messageList("m2"))
+        server.enqueue(metadata("m1", "a@b.com", "s", "b", "1700000000000"))
+        server.enqueue(metadata("m2", "c@d.com", "s2", "b2", "1700000000001"))
+
+        val connector = connector()
+        val mails = connector.listOtpCandidates(null)
 
         server.takeRequest() // profile
-        server.takeRequest() // history 404
-        val listRequest = server.takeRequest()
-        assertEquals("/gmail/v1/users/me/messages", listRequest.requestUrl!!.encodedPath)
-        assertNotNull(listRequest.requestUrl!!.queryParameter("q"))
-        assertEquals(listOf("m3"), mails.map { it.messageId })
+        val firstPage = server.takeRequest()
+        assertEquals(GmailConnector.QUERY, firstPage.requestUrl!!.queryParameter("q"))
+        assertNull(firstPage.requestUrl!!.queryParameter("pageToken"))
+        val secondPage = server.takeRequest()
+        assertEquals("PAGE2", secondPage.requestUrl!!.queryParameter("pageToken"))
+        assertEquals(GmailConnector.QUERY, secondPage.requestUrl!!.queryParameter("q"))
+
+        assertEquals(listOf("m1", "m2"), mails.map { it.messageId })
+        assertEquals("1000", connector.newCursor(mails))
+    }
+
+    @Test
+    fun doesNotAdvanceCursorWhenPageCapHit() {
+        server.enqueue(profile("2000"))
+        server.enqueue(messageList("m1", pageToken = "PAGE2"))
+        server.enqueue(messageList("m2", pageToken = "PAGE3"))
+        server.enqueue(metadata("m1", "a@b.com", "s", "b", "1700000000000"))
+        server.enqueue(metadata("m2", "c@d.com", "s2", "b2", "1700000000001"))
+
+        val connector = GmailConnector(
+            account = account,
+            client = OkHttpClient(),
+            baseUrl = server.url("/"),
+            tokenProvider = { "token-1" },
+            maxPages = 2,
+        )
+        val mails = connector.listOtpCandidates("1000")
+
+        assertEquals(listOf("m1", "m2"), mails.map { it.messageId })
+        // Cap hit with PAGE3 still queued: the cursor must stay at the stored value,
+        // not jump to the new mailbox historyId ("2000"), so the remainder is re-read.
+        assertEquals("1000", connector.newCursor(mails))
     }
 
     @Test
@@ -269,16 +312,11 @@ class GmailConnectorTest {
             .toString(),
     )
 
-    private fun messageList(vararg ids: String): MockResponse =
-        MockResponse().setBody(JSONObject().put("messages", idArray(*ids)).toString())
-
-    private fun history(vararg ids: String): MockResponse =
-        MockResponse().setBody(
-            JSONObject()
-                .put("history", JSONArray().put(JSONObject().put("messages", idArray(*ids))))
-                .put("historyId", "2000")
-                .toString(),
-        )
+    private fun messageList(vararg ids: String, pageToken: String? = null): MockResponse {
+        val body = JSONObject().put("messages", idArray(*ids))
+        if (pageToken != null) body.put("nextPageToken", pageToken)
+        return MockResponse().setBody(body.toString())
+    }
 
     private fun idArray(vararg ids: String): JSONArray {
         val array = JSONArray()
