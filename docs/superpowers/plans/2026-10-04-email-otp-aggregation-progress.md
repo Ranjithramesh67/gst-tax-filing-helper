@@ -38,7 +38,7 @@ Execution mode: subagent-driven-development
 | 14 | Mobile email settings screen | done (review clean after fix) | `267592a`, `6cbd48d`, `0408143` |
 | 15 | Gmail connector | done (review clean after fixes) | `c5a5da5`, `4d044ca` |
 | 16 | Microsoft Graph connector | done (review clean after fixes) | `326fd8a` |
-| 17 | Types + api-client additions | pending | - |
+| 17 | Types + api-client additions | done (types already present from T4/T5; added `otp.ingest`) | `6100efe` |
 | 18 | `SmsLogScreen` server feed + overlay | pending | - |
 | 19 | Build, test, deploy, republish | pending | - |
 
