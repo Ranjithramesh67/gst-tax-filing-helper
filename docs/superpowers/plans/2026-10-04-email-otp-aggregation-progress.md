@@ -36,7 +36,7 @@ Execution mode: subagent-driven-development
 | 12 | Poller + outbox + retry job | done (review clean) | `2c0b881` |
 | 13 | RN bridge + JS wrapper + consent | done (review clean after hardening) | `5a8260c`, `54d1b5d`, `67f4412` |
 | 14 | Mobile email settings screen | done (review clean after fix) | `267592a`, `6cbd48d`, `0408143` |
-| 15 | Gmail connector | pending | - |
+| 15 | Gmail connector | done (review clean after fixes) | `c5a5da5`, `4d044ca` |
 | 16 | Microsoft Graph connector | pending | - |
 | 17 | Types + api-client additions | pending | - |
 | 18 | `SmsLogScreen` server feed + overlay | pending | - |
