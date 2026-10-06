@@ -16,6 +16,8 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { EmailAccounts, type EmailAccountMetadata } from '@/native/EmailAccounts';
 import { useAuth } from '@/lib/auth';
+import { ProviderChips } from '@/components/ProviderChips';
+import { presetFor, type EmailProviderId } from '@/lib/emailProviders';
 import { colors, fontSize, radius, spacing } from '@/theme';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -40,6 +42,22 @@ function isValidPort(raw: string): boolean {
   return port >= 1 && port <= 65535;
 }
 
+function oauthErrorMessage(error: unknown): string {
+  const code = (error as { code?: string } | undefined)?.code;
+  switch (code) {
+    case 'LINK_CANCELLED':
+      return 'Sign-in was cancelled.';
+    case 'IN_PROGRESS':
+      return 'A sign-in is already in progress.';
+    case 'NO_ACTIVITY':
+      return 'Could not start sign-in. Please try again.';
+    default:
+      return error instanceof Error && error.message
+        ? error.message
+        : 'Could not link the account.';
+  }
+}
+
 export function EmailSettingsScreen(): React.ReactElement {
   const { emailConsent, setEmailConsent } = useAuth();
 
@@ -55,6 +73,8 @@ export function EmailSettingsScreen(): React.ReactElement {
   const [port, setPort] = useState('993');
   const [errors, setErrors] = useState<FormErrors>({});
   const [adding, setAdding] = useState(false);
+  const [provider, setProvider] = useState<EmailProviderId>('other');
+  const [linking, setLinking] = useState<EmailProviderId | null>(null);
 
   const [busyId, setBusyId] = useState<string | null>(null);
   const [consentBusy, setConsentBusy] = useState(false);
@@ -68,6 +88,26 @@ export function EmailSettingsScreen(): React.ReactElement {
       setLoadError(error instanceof Error ? error.message : 'Could not load email accounts.');
     }
   }, []);
+
+  const selectedPreset = presetFor(provider);
+  const isOauth = selectedPreset.action === 'oauth';
+
+  const applyPreset = useCallback((id: EmailProviderId) => {
+    const preset = presetFor(id);
+    setHost(preset.host ?? '');
+    setPort(preset.port ? String(preset.port) : '993');
+  }, []);
+
+  const onSelectProvider = useCallback(
+    (id: EmailProviderId) => {
+      setProvider(id);
+      setErrors({});
+      setNotice(null);
+      setPassword('');
+      applyPreset(id);
+    },
+    [applyPreset],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -107,11 +147,13 @@ export function EmailSettingsScreen(): React.ReactElement {
     const next: FormErrors = {};
     if (!address.trim()) next.address = 'Email address is required.';
     else if (!EMAIL_PATTERN.test(address.trim())) next.address = 'Enter a valid email address.';
-    if (!password) next.password = 'Password is required.';
-    if (!host.trim()) next.host = 'IMAP host is required.';
-    if (!isValidPort(port)) next.port = 'Port must be between 1 and 65535.';
+    if (!isOauth) {
+      if (!password) next.password = 'Password is required.';
+      if (!host.trim()) next.host = 'IMAP host is required.';
+      if (!isValidPort(port)) next.port = 'Port must be between 1 and 65535.';
+    }
     return next;
-  }, [address, password, host, port]);
+  }, [address, host, isOauth, password, port]);
 
   const onAddAccount = useCallback(async () => {
     const nextErrors = validate();
@@ -137,9 +179,8 @@ export function EmailSettingsScreen(): React.ReactElement {
         return;
       }
       setAddress('');
-      setHost('');
-      setPort('993');
       setErrors({});
+      applyPreset(provider);
       await load();
       setNotice('IMAP account added.');
     } catch (error) {
@@ -150,7 +191,30 @@ export function EmailSettingsScreen(): React.ReactElement {
       setPassword('');
       setAdding(false);
     }
-  }, [address, host, load, password, port, validate]);
+  }, [address, applyPreset, host, load, password, port, provider, validate]);
+
+  const onLinkOauth = useCallback(async () => {
+    if (!EmailAccounts.isAvailable) {
+      setNotice('Email accounts are only available on Android.');
+      return;
+    }
+    const id = provider;
+    setLinking(id);
+    setNotice(null);
+    try {
+      const result = id === 'gmail' ? await EmailAccounts.linkGmail() : await EmailAccounts.linkGraph();
+      if (result.ok) {
+        await load();
+        setNotice(id === 'gmail' ? 'Gmail account linked.' : 'Outlook account linked.');
+      } else {
+        setNotice('Could not link the account. Please try again.');
+      }
+    } catch (error) {
+      setNotice(oauthErrorMessage(error));
+    } finally {
+      setLinking(null);
+    }
+  }, [load, provider]);
 
   const runSetEnabled = useCallback(
     async (account: EmailAccountMetadata, enabled: boolean) => {
@@ -263,84 +327,117 @@ export function EmailSettingsScreen(): React.ReactElement {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Add IMAP account</Text>
+          <Text style={styles.cardTitle}>Add email account</Text>
           <Text style={styles.helper}>
-            Use an app password where your provider requires one. Credentials stay encrypted on this
-            device.
+            Pick your provider, or choose Other to enter IMAP details manually. Credentials stay
+            encrypted on this device.
           </Text>
 
-          <Text style={styles.label}>Email address</Text>
-          <TextInput
-            value={address}
-            onChangeText={setAddress}
-            placeholder="you@example.com"
-            placeholderTextColor={colors.textMuted}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!adding}
-            style={[styles.input, errors.address ? styles.inputError : undefined]}
+          <ProviderChips
+            selected={provider}
+            onSelect={onSelectProvider}
+            disabled={adding || linking != null}
           />
-          {errors.address ? <Text style={styles.fieldError}>{errors.address}</Text> : null}
 
-          <Text style={styles.label}>Password</Text>
-          <TextInput
-            value={password}
-            onChangeText={setPassword}
-            placeholder="App password"
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-            secureTextEntry
-            editable={!adding}
-            style={[styles.input, errors.password ? styles.inputError : undefined]}
-          />
-          {errors.password ? <Text style={styles.fieldError}>{errors.password}</Text> : null}
+          <Text style={styles.helper}>{selectedPreset.helper}</Text>
 
-          <Text style={styles.label}>IMAP host</Text>
-          <TextInput
-            value={host}
-            onChangeText={setHost}
-            placeholder="imap.example.com"
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!adding}
-            style={[styles.input, errors.host ? styles.inputError : undefined]}
-          />
-          {errors.host ? <Text style={styles.fieldError}>{errors.host}</Text> : null}
+          {isOauth ? (
+            <Pressable
+              accessibilityRole="button"
+              disabled={linking != null}
+              onPress={() => {
+                void onLinkOauth();
+              }}
+              style={({ pressed }) => [
+                styles.primaryButton,
+                pressed && styles.primaryButtonPressed,
+                linking != null && styles.buttonDisabled,
+              ]}
+            >
+              {linking != null ? (
+                <ActivityIndicator color={colors.surface} />
+              ) : (
+                <Text style={styles.primaryButtonText}>
+                  {provider === 'gmail' ? 'Sign in with Google' : 'Sign in with Microsoft'}
+                </Text>
+              )}
+            </Pressable>
+          ) : (
+            <>
+              <Text style={styles.label}>Email address</Text>
+              <TextInput
+                value={address}
+                onChangeText={setAddress}
+                placeholder="you@example.com"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!adding}
+                style={[styles.input, errors.address ? styles.inputError : undefined]}
+              />
+              {errors.address ? <Text style={styles.fieldError}>{errors.address}</Text> : null}
 
-          <Text style={styles.label}>Port</Text>
-          <TextInput
-            value={port}
-            onChangeText={setPort}
-            placeholder="993"
-            placeholderTextColor={colors.textMuted}
-            keyboardType="number-pad"
-            maxLength={5}
-            editable={!adding}
-            style={[styles.input, errors.port ? styles.inputError : undefined]}
-          />
-          {errors.port ? <Text style={styles.fieldError}>{errors.port}</Text> : null}
+              <Text style={styles.label}>{selectedPreset.passwordLabel ?? 'Password'}</Text>
+              <TextInput
+                value={password}
+                onChangeText={setPassword}
+                placeholder={selectedPreset.passwordLabel ?? 'Password'}
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+                secureTextEntry
+                editable={!adding}
+                style={[styles.input, errors.password ? styles.inputError : undefined]}
+              />
+              {errors.password ? <Text style={styles.fieldError}>{errors.password}</Text> : null}
 
-          <Pressable
-            accessibilityRole="button"
-            disabled={adding}
-            onPress={() => {
-              void onAddAccount();
-            }}
-            style={({ pressed }) => [
-              styles.primaryButton,
-              pressed && styles.primaryButtonPressed,
-              adding && styles.buttonDisabled,
-            ]}
-          >
-            {adding ? (
-              <ActivityIndicator color={colors.surface} />
-            ) : (
-              <Text style={styles.primaryButtonText}>Add account</Text>
-            )}
-          </Pressable>
+              <Text style={styles.label}>IMAP host</Text>
+              <TextInput
+                value={host}
+                onChangeText={setHost}
+                placeholder="imap.example.com"
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!adding}
+                style={[styles.input, errors.host ? styles.inputError : undefined]}
+              />
+              {errors.host ? <Text style={styles.fieldError}>{errors.host}</Text> : null}
+
+              <Text style={styles.label}>Port</Text>
+              <TextInput
+                value={port}
+                onChangeText={setPort}
+                placeholder="993"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="number-pad"
+                maxLength={5}
+                editable={!adding}
+                style={[styles.input, errors.port ? styles.inputError : undefined]}
+              />
+              {errors.port ? <Text style={styles.fieldError}>{errors.port}</Text> : null}
+
+              <Pressable
+                accessibilityRole="button"
+                disabled={adding}
+                onPress={() => {
+                  void onAddAccount();
+                }}
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  pressed && styles.primaryButtonPressed,
+                  adding && styles.buttonDisabled,
+                ]}
+              >
+                {adding ? (
+                  <ActivityIndicator color={colors.surface} />
+                ) : (
+                  <Text style={styles.primaryButtonText}>Add account</Text>
+                )}
+              </Pressable>
+            </>
+          )}
         </View>
 
         <Text style={styles.sectionTitle}>Linked accounts</Text>
