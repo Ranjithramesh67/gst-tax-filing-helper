@@ -120,8 +120,9 @@ attempt, is sent only to the native encrypted store, and is never returned.
 | `NO_ACTIVITY` | "Could not start sign-in. Please try again." |
 | `LINK_FAILED` / other | the rejection message, else "Could not link the account." |
 
-A per-button busy flag prevents double taps. After resolve or reject, the
-accounts list is reloaded.
+A per-button busy flag prevents double taps. On a successful link the accounts
+list is reloaded; on cancellation/failure (which cannot change server state) the
+mapped message is shown without a reload.
 
 ## Data flow
 

@@ -21,6 +21,7 @@ import { presetFor, type EmailProviderId } from '@/lib/emailProviders';
 import { colors, fontSize, radius, spacing } from '@/theme';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const ANDROID_ONLY_NOTICE = 'Email accounts are only available on Android.';
 
 interface FormErrors {
   address?: string;
@@ -55,6 +56,17 @@ function oauthErrorMessage(error: unknown): string {
       return error instanceof Error && error.message
         ? error.message
         : 'Could not link the account.';
+  }
+}
+
+function linkOauthAccount(id: EmailProviderId): Promise<{ ok: boolean }> {
+  switch (id) {
+    case 'gmail':
+      return EmailAccounts.linkGmail();
+    case 'outlook':
+      return EmailAccounts.linkGraph();
+    default:
+      return Promise.reject(new Error(`Provider ${id} does not support sign-in.`));
   }
 }
 
@@ -162,7 +174,8 @@ export function EmailSettingsScreen(): React.ReactElement {
     if (Object.keys(nextErrors).length > 0) return;
 
     if (!EmailAccounts.isAvailable) {
-      setNotice('Email accounts are only available on Android.');
+      setPassword('');
+      setNotice(ANDROID_ONLY_NOTICE);
       return;
     }
 
@@ -195,14 +208,14 @@ export function EmailSettingsScreen(): React.ReactElement {
 
   const onLinkOauth = useCallback(async () => {
     if (!EmailAccounts.isAvailable) {
-      setNotice('Email accounts are only available on Android.');
+      setNotice(ANDROID_ONLY_NOTICE);
       return;
     }
     const id = provider;
     setLinking(id);
     setNotice(null);
     try {
-      const result = id === 'gmail' ? await EmailAccounts.linkGmail() : await EmailAccounts.linkGraph();
+      const result = await linkOauthAccount(id);
       if (result.ok) {
         await load();
         setNotice(id === 'gmail' ? 'Gmail account linked.' : 'Outlook account linked.');
@@ -449,7 +462,8 @@ export function EmailSettingsScreen(): React.ReactElement {
           <View style={styles.card}>
             <Text style={styles.emptyTitle}>No email accounts linked</Text>
             <Text style={styles.emptyBody}>
-              Add an IMAP account above to let GSTFlow pick up OTP emails from it.
+              Add an email account above (IMAP, Gmail, or Outlook) to let GSTFlow pick up OTP
+              emails from it.
             </Text>
           </View>
         ) : (
